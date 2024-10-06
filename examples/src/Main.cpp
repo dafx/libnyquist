@@ -109,6 +109,7 @@ int main(int argc, const char **argv) try
     myDevice.Record(fileData->sampleRate * fileData->lengthSeconds, fileData->samples);
     */
 
+#if 0
     if (fileData->sampleRate != desiredSampleRate)
     {
         std::cout << "[Warning - Sample Rate Mismatch] - file is sampled at " << fileData->sampleRate << " and output is " << desiredSampleRate << std::endl;
@@ -117,7 +118,6 @@ int main(int argc, const char **argv) try
     std::cout << "Input Samples: " << fileData->samples.size() << std::endl;
 
     // Convert mono to stereo for testing playback
-    #if 0
     if (fileData->channelCount == 1)
     {
         std::cout << "Playing MONO for: " << fileData->lengthSeconds << " seconds..." << std::endl;
@@ -130,7 +130,7 @@ int main(int argc, const char **argv) try
         std::cout << "Playing STEREO for: " << fileData->lengthSeconds << " seconds..." << std::endl;
         myDevice.Play(fileData->samples);
     }
-    #endif
+#endif
     { // save to wave file
     
         AudioFile<float> a;
