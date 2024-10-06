@@ -45,3 +45,4 @@ DerivedData
 *.opendb
 
 encoded.wav
+.vscode

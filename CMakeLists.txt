@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.13)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(LIBNYQUIST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(CMAKE_MODULE_PATH ${LIBNYQUIST_ROOT}/cmake)
 
@@ -294,7 +297,7 @@ if(LIBNYQUIST_BUILD_EXAMPLE)
         target_compile_definitions(${NQR_EXAMPLE_APP_NAME} PRIVATE __LINUX_ALSA__)
         target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE asound pthread)
     else()
-        message(FATAL, "On Linux, one of LIBNYQUIST_JACK, LIBNYQUIST_PULSE, or LIBNYQUIST_ASOUND must be set.")
+        # message(FATAL, "On Linux, one of LIBNYQUIST_JACK, LIBNYQUIST_PULSE, or LIBNYQUIST_ASOUND must be set.")
     endif()
 
     target_include_directories(${NQR_EXAMPLE_APP_NAME} PRIVATE
@@ -320,4 +323,13 @@ if(LIBNYQUIST_BUILD_EXAMPLE)
         )
     ENDIF(APPLE)
 
+endif()
+
+
+enable_testing()
+
+# Add test for libnyquist-examples
+if (LIBNYQUIST_BUILD_EXAMPLE)
+    add_test(NAME libnyquist_example_test
+             COMMAND $<TARGET_FILE:libnyquist-examples>)
 endif()

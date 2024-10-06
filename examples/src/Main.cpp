@@ -6,7 +6,7 @@
 #pragma comment(lib, "dsound.lib")
 #endif
 
-#include "AudioDevice.h"
+#include "AudioFile.h"
 
 #include "libnyquist/Decoders.h"
 #include "libnyquist/Encoders.h"
@@ -17,12 +17,9 @@ using namespace nqr;
 
 int main(int argc, const char **argv) try
 {
-    AudioDevice::ListAudioDevices();
 
     const int desiredSampleRate = 44100;
     const int desiredChannelCount = 2;
-    AudioDevice myDevice(desiredChannelCount, desiredSampleRate);
-    myDevice.Open(myDevice.info.id);
 
     std::shared_ptr<AudioData> fileData = std::make_shared<AudioData>();
 
@@ -75,7 +72,7 @@ int main(int argc, const char **argv) try
         //loader.Load(fileData.get(), "flac", memory.buffer); // broken
 
         // Single-channel opus
-        //loader.Load(fileData.get(), "test_data/ad_hoc/detodos.opus"); // "Firefox: From All, To All"
+        loader.Load(fileData.get(), "../../test_data/ad_hoc/detodos.opus"); // "Firefox: From All, To All"
 
         // 1 + 2 channel wavpack
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Float32.wv");
@@ -86,8 +83,8 @@ int main(int argc, const char **argv) try
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Int24_Mono.wv");
 
         // In-memory wavpack
-        auto memory = ReadFile("test_data/ad_hoc/TestBeat_Float32.wv");
-        loader.Load(fileData.get(), "wv", memory.buffer);
+        // auto memory = ReadFile("test_data/ad_hoc/TestBeat_Float32.wv");
+        // loader.Load(fileData.get(), "wv", memory.buffer);
 
         // 1 + 2 channel musepack
         //loader.Load(fileData.get(), "test_data/ad_hoc/44_16_stereo.mpc");
@@ -120,6 +117,7 @@ int main(int argc, const char **argv) try
     std::cout << "Input Samples: " << fileData->samples.size() << std::endl;
 
     // Convert mono to stereo for testing playback
+    #if 0
     if (fileData->channelCount == 1)
     {
         std::cout << "Playing MONO for: " << fileData->lengthSeconds << " seconds..." << std::endl;
@@ -131,6 +129,25 @@ int main(int argc, const char **argv) try
     {
         std::cout << "Playing STEREO for: " << fileData->lengthSeconds << " seconds..." << std::endl;
         myDevice.Play(fileData->samples);
+    }
+    #endif
+    { // save to wave file
+    
+        AudioFile<float> a;
+        a.setNumChannels (fileData->channelCount);
+        a.setNumSamplesPerChannel (fileData->samples.size() / fileData->channelCount);
+        a.setSampleRate (fileData->sampleRate);
+
+        for (int i = 0; i < fileData->channelCount; i++)
+        {
+            for (int j = 0; j < a.getNumSamplesPerChannel(); j++)
+            {
+                a.samples[i][j] = (fileData->samples[j * fileData->channelCount + i]);
+            }
+        }
+
+        std::string filePath = "opusdec.wav"; // change this to somewhere useful for you
+        a.save (filePath, AudioFileFormat::Wave);
     }
 
     // Test Opus Encoding
