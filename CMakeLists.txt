@@ -331,5 +331,7 @@ enable_testing()
 # Add test for libnyquist-examples
 if (LIBNYQUIST_BUILD_EXAMPLE)
     add_test(NAME libnyquist_example_test
-             COMMAND $<TARGET_FILE:libnyquist-examples>)
+            COMMAND $<TARGET_FILE:libnyquist-examples>
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build/bin
+            )
 endif()
