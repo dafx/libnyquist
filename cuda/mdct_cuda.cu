@@ -7,3 +7,17 @@ __global__ void doPreRotation(float* input, float* output, int N) {
         output[idx] = input[idx] * cosf(angle) - input[N - 1 - idx] * sinf(angle); // Place holder dummy code, DO NOT RUN
     }
 }
+
+#include <iostream>
+void printCudaVersion()
+{
+    std::cout << "CUDA Compiled version: " << __CUDACC_VER__ << std::endl;
+
+    int runtime_ver;
+    cudaRuntimeGetVersion(&runtime_ver);
+    std::cout << "CUDA Runtime version: " << runtime_ver << std::endl;
+
+    int driver_ver;
+    cudaDriverGetVersion(&driver_ver);
+    std::cout << "CUDA Driver version: " << driver_ver << std::endl;
+}
