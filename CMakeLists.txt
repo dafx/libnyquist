@@ -8,7 +8,7 @@ set(CMAKE_MODULE_PATH ${LIBNYQUIST_ROOT}/cmake)
 
 include(CXXhelpers)
 include(GNUInstallDirs)
-
+add_subdirectory(cuda)
 
 if (CMAKE_OSX_ARCHITECTURES)
     if(CMAKE_OSX_SYSROOT MATCHES ".*iphoneos.*")
