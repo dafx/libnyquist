@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(CUDAToolkit_ROOT /usr/local/cuda)
-
 project(libnyquist_cuda LANGUAGES CXX CUDA)
 
 # Specify the CUDA standard
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+# Specify the CUDA architectures
+set(CMAKE_CUDA_ARCHITECTURES 52 60 61 70 75 80)
 
 # Add the source files for the library
 set(SOURCES

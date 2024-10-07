@@ -47,6 +47,7 @@
 #include <iterator>
 #include <algorithm>
 #include <limits>
+#include <stdint.h>
 
 // disable some warnings on Windows
 #if defined (_MSC_VER)
