@@ -8,7 +8,7 @@ set(CMAKE_MODULE_PATH ${LIBNYQUIST_ROOT}/cmake)
 
 include(CXXhelpers)
 include(GNUInstallDirs)
-
+add_subdirectory(cuda)
 
 if (CMAKE_OSX_ARCHITECTURES)
     if(CMAKE_OSX_SYSROOT MATCHES ".*iphoneos.*")
@@ -335,3 +335,8 @@ if (LIBNYQUIST_BUILD_EXAMPLE)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build/bin
             )
 endif()
+
+
+add_test(NAME libnyquist_cuda_test
+        COMMAND $<TARGET_FILE:libnyquist_cuda_test>
+        )
