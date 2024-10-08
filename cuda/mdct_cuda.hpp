@@ -12,3 +12,7 @@ void printCudaVersion();
 }
 #endif
 
+// CUDA functions
+#ifdef __CUDACC__
+__global__ void doPreRotationCuda(const float *input, float *output, int N);
+#endif
