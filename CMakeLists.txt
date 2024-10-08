@@ -21,6 +21,8 @@ else()
     option(LIBNYQUIST_BUILD_EXAMPLE "Build example application" ON)
 endif()
 
+set(BUILD_LIBOPUS ON)
+
 #-------------------------------------------------------------------------------
 
 # libopus
@@ -28,12 +30,15 @@ endif()
 if (BUILD_LIBOPUS)
     project(libopus)
 
+    option(USE_CUDA "Use CUDA" ON)
+
     file(GLOB third_opus_src
         "${LIBNYQUIST_ROOT}/third_party/opus/celt/*.c"
         "${LIBNYQUIST_ROOT}/third_party/opus/opusfile/src/*.c"
         "${LIBNYQUIST_ROOT}/third_party/opus/silk/*.c"
         "${LIBNYQUIST_ROOT}/third_party/opus/silk/float/*.c"
     )
+    file(GLOB gpu_opus_src "${LIBNYQUIST_ROOT}/cuda/mdct_cuda.cu")
     set(lib_opus_src
         "${LIBNYQUIST_ROOT}/third_party/opus/libopus/src/analysis.c"
         "${LIBNYQUIST_ROOT}/third_party/opus/libopus/src/mlp_data.c"
@@ -45,7 +50,15 @@ if (BUILD_LIBOPUS)
         "${LIBNYQUIST_ROOT}/third_party/opus/libopus/src/repacketizer.c"
     )
 
-    add_library(libopus STATIC ${third_opus_src} ${lib_opus_src})
+    message(STATUS "USE_CUDA: ${USE_CUDA}")
+    if(USE_CUDA)
+        set(CMAKE_CUDA_ARCHITECTURES 52 60 61 70 75 80)
+        enable_language(CUDA)
+        add_library(libopus STATIC ${third_opus_src} ${gpu_opus_src} ${lib_opus_src})
+        add_compile_definitions(USE_CUDA)
+    else()
+        add_library(libopus STATIC ${third_opus_src} ${lib_opus_src})
+    endif()
 
     set_cxx_version(libopus)
     _set_compile_options(libopus)
@@ -305,6 +318,7 @@ if(LIBNYQUIST_BUILD_EXAMPLE)
         ${LIBNYQUIST_ROOT}/third_party
     )
     target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE libnyquist)
+    target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE libopus)
 
     set_target_properties(${NQR_EXAMPLE_APP_NAME}
         PROPERTIES
