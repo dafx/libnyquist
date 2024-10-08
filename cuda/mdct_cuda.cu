@@ -11,6 +11,7 @@ __global__ void doPreRotationCuda(const float *input, float *output, int N)
 
 void doPreRotation(const float *input, float *output, int N)
 {
+    doPreRotationCuda<<<(N + 255) / 256, 256>>>(input, output, N);
 }
 
 #include <iostream>
