@@ -172,7 +172,7 @@ endif()
 
 # libnyquist static library
 
-project(libnyquist)
+project(libnyquist LANGUAGES C CXX CUDA)
 
 file(GLOB nyquist_include "${LIBNYQUIST_ROOT}/include/libnyquist/*")
 file(GLOB nyquist_src     "${LIBNYQUIST_ROOT}/src/*")
@@ -213,6 +213,7 @@ target_include_directories(libnyquist
     ${LIBNYQUIST_ROOT}/third_party/wavpack/include
     ${LIBNYQUIST_ROOT}/src
 )
+target_compile_definitions(libnyquist PRIVATE USE_CUDA)
 
 if (MSVC_IDE)
     # hack to get around the "Debug" and "Release" directories cmake tries to add on Windows
@@ -305,6 +306,8 @@ if(LIBNYQUIST_BUILD_EXAMPLE)
         ${LIBNYQUIST_ROOT}/third_party
     )
     target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE libnyquist)
+    target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE libnyquist_cuda)
+    target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE ${CUDA_LIBRARIES})
 
     set_target_properties(${NQR_EXAMPLE_APP_NAME}
         PROPERTIES

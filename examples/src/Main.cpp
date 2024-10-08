@@ -72,7 +72,7 @@ int main(int argc, const char **argv) try
         //loader.Load(fileData.get(), "flac", memory.buffer); // broken
 
         // Single-channel opus
-        loader.Load(fileData.get(), "../../test_data/ad_hoc/detodos.opus"); // "Firefox: From All, To All"
+        loader.Load(fileData.get(), "../../test_data/sb-reverie.opus"); // "Firefox: From All, To All"
 
         // 1 + 2 channel wavpack
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Float32.wv");

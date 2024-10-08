@@ -1,11 +1,14 @@
 #pragma once
 
-#ifdef __CUDACC__
-#define CUDA_KERNEL __global__
-#else
-#define CUDA_KERNEL
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-CUDA_KERNEL void doPreRotation(float *input, float *output, int N);
-
+void doPreRotation(const float *input, float *output, int N);
 void printCudaVersion();
+
+#ifdef __cplusplus
+}
+#endif
+

@@ -237,7 +237,7 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scala
       const kiss_fft_scalar * OPUS_RESTRICT xp2 = in+stride*(N2-1);
       kiss_fft_scalar * OPUS_RESTRICT yp = f2;
       const kiss_twiddle_scalar *t = &l->trig[0];
-#if USE_CUDA
+#ifdef USE_CUDA
       doPreRotation(xp1, yp, N4);
 #else
       for(i=0;i<N4;i++)
@@ -251,8 +251,8 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scala
          xp1+=2*stride;
          xp2-=2*stride;
       }
-   }
 #endif
+   }
 
    /* Inverse N/4 complex FFT. This one should *not* downscale even in fixed-point */
    opus_ifft(l->kfft[shift], (kiss_fft_cpx *)f2, (kiss_fft_cpx *)(out+(overlap>>1)));
