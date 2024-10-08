@@ -44,5 +44,11 @@ DerivedData
 
 *.opendb
 
+# Output files from tests
 encoded.wav
+libnyquist_example_output.opus
+opusdec.wav
+
+#VSCode
 .vscode
+.devcontainer
