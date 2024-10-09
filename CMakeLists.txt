@@ -8,7 +8,14 @@ set(CMAKE_MODULE_PATH ${LIBNYQUIST_ROOT}/cmake)
 
 include(CXXhelpers)
 include(GNUInstallDirs)
-add_subdirectory(cuda)
+
+option (USE_CUDA "USE CUDA to compile the library")
+if(USE_CUDA)
+  message(STATUS "CUDA ENABLED")
+else()
+  message(STATUS "CUDA DISABLED")
+endif()
+
 
 if (CMAKE_OSX_ARCHITECTURES)
     if(CMAKE_OSX_SYSROOT MATCHES ".*iphoneos.*")
@@ -213,7 +220,11 @@ target_include_directories(libnyquist
     ${LIBNYQUIST_ROOT}/third_party/wavpack/include
     ${LIBNYQUIST_ROOT}/src
 )
-target_compile_definitions(libnyquist PRIVATE USE_CUDA)
+
+if (USE_CUDA)
+  add_subdirectory(cuda)
+  target_compile_definitions(libnyquist PRIVATE USE_CUDA)
+endif()
 
 if (MSVC_IDE)
     # hack to get around the "Debug" and "Release" directories cmake tries to add on Windows
@@ -306,8 +317,11 @@ if(LIBNYQUIST_BUILD_EXAMPLE)
         ${LIBNYQUIST_ROOT}/third_party
     )
     target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE libnyquist)
-    target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE libnyquist_cuda)
-    target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE ${CUDA_LIBRARIES})
+
+    if(USE_CUDA)
+      target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE libnyquist_cuda)
+      target_link_libraries(${NQR_EXAMPLE_APP_NAME} PRIVATE ${CUDA_LIBRARIES})
+    endif()
 
     set_target_properties(${NQR_EXAMPLE_APP_NAME}
         PROPERTIES
@@ -340,6 +354,8 @@ if (LIBNYQUIST_BUILD_EXAMPLE)
 endif()
 
 
-add_test(NAME libnyquist_cuda_test
+if(USE_CUDA)
+  add_test(NAME libnyquist_cuda_test
         COMMAND $<TARGET_FILE:libnyquist_cuda_test>
-        )
+  )
+endif()
