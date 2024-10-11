@@ -52,7 +52,7 @@ void preRotateWithCuda(const var_t *host_xp1, var_t *host_yp,
              cudaMemcpyHostToDevice);
 
   // Launch the kernel with the appropriate block and grid sizes
-  int blockSize = 256; // Number of threads per block
+  int blockSize = 32; // Number of threads per block
   int numBlocks = (N4 + blockSize - 1) /
                   blockSize; // Number of blocks, ensuring full coverage
 
