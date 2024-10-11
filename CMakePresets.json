@@ -11,7 +11,8 @@
                 "CMAKE_C_COMPILER": "/usr/bin/gcc",
                 "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "CMAKE_BUILD_TYPE": "Release",
-                "ENABLE_CPU_PROFILING": true
+                "ENABLE_CPU_PROFILING": true,
+                "CMAKE_VERBOSE_MAKEFILE": true
             }
         },
         {
@@ -25,7 +26,8 @@
                 "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "CMAKE_BUILD_TYPE": "Release",
                 "USE_CUDA": true,
-                "ENABLE_CPU_PROFILING": true
+                "ENABLE_CPU_PROFILING": true,
+                "CMAKE_VERBOSE_MAKEFILE": true
             }
         }
     ],
