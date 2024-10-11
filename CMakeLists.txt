@@ -226,6 +226,12 @@ if (USE_CUDA)
   target_compile_definitions(libnyquist PRIVATE USE_CUDA)
 endif()
 
+if (ENABLE_CPU_PROFILING)
+    message(STATUS "CPU profiling enabled")
+    target_compile_definitions(libnyquist PRIVATE MDCT_PROFILE)
+endif()
+
+
 if (MSVC_IDE)
     # hack to get around the "Debug" and "Release" directories cmake tries to add on Windows
     #set_target_properties(libnyquist PROPERTIES PREFIX "../")

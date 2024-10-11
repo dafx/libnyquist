@@ -53,6 +53,11 @@
 #include "stack_alloc.h"
 #include <math.h>
 
+#if MDCT_PROFILE
+#include <time.h>
+#endif
+
+
 #ifdef CUSTOM_MODES
 
 int clt_mdct_init(mdct_lookup *l, int N, int maxshift) {
@@ -212,6 +217,12 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
                        int shift, int stride) {
   int i;
   int N, N2, N4;
+
+  #if MDCT_PROFILE
+  // for timer
+  struct timespec start, stop;
+  #endif
+
   kiss_twiddle_scalar sine;
   VARDECL(kiss_fft_scalar, f2);
   SAVE_STACK;
@@ -234,6 +245,12 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
     const kiss_fft_scalar *OPUS_RESTRICT xp2 = in + stride * (N2 - 1);
     kiss_fft_scalar *OPUS_RESTRICT yp = f2;
     const kiss_twiddle_scalar *t = &l->trig[0];
+
+#if MDCT_PROFILE
+    // Start timing
+    clock_gettime(CLOCK_MONOTONIC, &start);
+#endif
+
 #ifdef USE_CUDA
     // doPreRotation(xp1, yp, N4);
     preRotateWithCuda(xp1, yp, t, N, shift, stride, sine);
@@ -249,6 +266,19 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
       xp2 -= 2 * stride;
     }
 #endif
+#if MDCT_PROFILE
+     // Stop timing
+    clock_gettime(CLOCK_MONOTONIC, &stop);
+
+    // Calculate the elapsed time in microseconds
+    long seconds = stop.tv_sec - start.tv_sec;
+    long nanoseconds = stop.tv_nsec - start.tv_nsec;
+    double elapsed = seconds * 1000000 + nanoseconds / 1000.0;  // Convert to microseconds
+
+    // Print the elapsed time in microseconds
+    printf("Time taken by preRotation: %.3f microseconds\n", elapsed);
+#endif
+
   }
 
   /* Inverse N/4 complex FFT. This one should *not* downscale even in
