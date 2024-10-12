@@ -1,0 +1,76 @@
+{
+    "version": 8,
+    "configurePresets": [
+        {
+            "name": "gcc",
+            "displayName": "GCC",
+            "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_CPU_PROFILING": true,
+                "CMAKE_VERBOSE_MAKEFILE": true
+            }
+        },
+        {
+            "name": "gcc-cuda",
+            "displayName": "GCC with CUDA",
+            "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+                "CMAKE_BUILD_TYPE": "Release",
+                "USE_CUDA": true,
+                "ENABLE_CPU_PROFILING": true,
+                "CMAKE_VERBOSE_MAKEFILE": true
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "gcc",
+            "configurePreset": "gcc"
+        },
+        {
+            "name": "gcc-cuda",
+            "configurePreset": "gcc-cuda"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "gcc",
+            "description": "gcc workflow",
+            "displayName": "gcc workflow",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "gcc"
+                },
+                {
+                    "type": "build",
+                    "name": "gcc"
+                }
+            ]
+        },
+        {
+            "name": "gcc-cuda",
+            "description": "gcc-cuda workflow",
+            "displayName": "gcc-cuda workflow",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "gcc-cuda"
+                },
+                {
+                    "type": "build",
+                    "name": "gcc-cuda"
+                }
+            ]
+        }
+    ]
+}
