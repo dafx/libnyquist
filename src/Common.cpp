@@ -66,7 +66,7 @@ namespace
 static const std::map<std::vector<int16_t>, std::string> magic_map{
         {{ 'w', 'v', 'p', 'k' },                                                     "wv"             },
         {{ 'M', 'P', 'C', 'K' },                                                     "mpc"            },
-        {{ 0xFF, 0xFB },                                                             "mp3"            }, // ÿû, mp3 without ID3 header
+        {{ 0xFF, 0xFB },                                                             "mp3"            }, // ï¿½ï¿½, mp3 without ID3 header
         {{ 'I', 'D', '3' },                                                          "mp3"            }, // mp3 with ID3 header
         {{ 'O', 'g', 'g', 'S' },                                                     "ogg_or_vorbis"  }, // see `match_ogg_subtype`
         {{ 'f', 'L', 'a', 'C' },                                                     "flac"           },
@@ -184,12 +184,7 @@ void NyquistIO::AddDecoderToTable(std::shared_ptr<nqr::BaseDecoder> decoder)
 void NyquistIO::BuildDecoderTable()
 {
     AddDecoderToTable(std::make_shared<WavDecoder>());
-    AddDecoderToTable(std::make_shared<WavPackDecoder>());
-    AddDecoderToTable(std::make_shared<FlacDecoder>());
-    AddDecoderToTable(std::make_shared<VorbisDecoder>());
     AddDecoderToTable(std::make_shared<OpusDecoder>());
-    AddDecoderToTable(std::make_shared<MusepackDecoder>());
-    AddDecoderToTable(std::make_shared<Mp3Decoder>());
 }
 
 NyquistFileBuffer nqr::ReadFile(const std::string & pathToFile)

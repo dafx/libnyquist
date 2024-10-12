@@ -266,6 +266,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "opus/opusfile/src/stream.c"
 #include "opus/opusfile/src/wincerts.c"
 
+#include "libogg/src/bitwise.c"
+#include "libogg/src/framing.c"
+
 #ifdef __clang__
     #pragma clang diagnostic pop
 #endif

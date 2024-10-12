@@ -77,55 +77,10 @@ namespace nqr
         virtual std::vector<std::string> GetSupportedFileExtensions() override final;
     };
 
-    struct WavPackDecoder final : public nqr::BaseDecoder
-    {
-        WavPackDecoder() = default;
-        virtual ~WavPackDecoder() override {};
-        virtual void LoadFromPath(nqr::AudioData * data, const std::string & path) override final;
-        virtual void LoadFromBuffer(nqr::AudioData * data, const std::vector<uint8_t> & memory) override final;
-        virtual std::vector<std::string> GetSupportedFileExtensions() override final;
-    };
-
-    struct VorbisDecoder final : public nqr::BaseDecoder
-    {
-        VorbisDecoder() = default;
-        virtual ~VorbisDecoder() override {}
-        virtual void LoadFromPath(nqr::AudioData * data, const std::string & path) override final;
-        virtual void LoadFromBuffer(nqr::AudioData * data, const std::vector<uint8_t> & memory) override final;
-        virtual std::vector<std::string> GetSupportedFileExtensions() override final;
-    };
-
     struct OpusDecoder final : public nqr::BaseDecoder
     {
         OpusDecoder() = default;
         virtual ~OpusDecoder() override {}
-        virtual void LoadFromPath(nqr::AudioData * data, const std::string & path) override final;
-        virtual void LoadFromBuffer(nqr::AudioData * data, const std::vector<uint8_t> & memory) override final;
-        virtual std::vector<std::string> GetSupportedFileExtensions() override final;
-    };
-
-    struct MusepackDecoder final : public nqr::BaseDecoder
-    {
-        MusepackDecoder() = default;
-        virtual ~MusepackDecoder() override {};
-        virtual void LoadFromPath(nqr::AudioData * data, const std::string & path) override final;
-        virtual void LoadFromBuffer(nqr::AudioData * data, const std::vector<uint8_t> & memory) override final;
-        virtual std::vector<std::string> GetSupportedFileExtensions() override final;
-    };
-
-    struct Mp3Decoder final : public nqr::BaseDecoder
-    {
-        Mp3Decoder() = default;
-        virtual ~Mp3Decoder() override {};
-        virtual void LoadFromPath(nqr::AudioData * data, const std::string & path) override final;
-        virtual void LoadFromBuffer(nqr::AudioData * data, const std::vector<uint8_t> & memory) override final;
-        virtual std::vector<std::string> GetSupportedFileExtensions() override final;
-    };
-
-    struct FlacDecoder final : public nqr::BaseDecoder
-    {
-        FlacDecoder() = default;
-        virtual ~FlacDecoder() override {}
         virtual void LoadFromPath(nqr::AudioData * data, const std::string & path) override final;
         virtual void LoadFromBuffer(nqr::AudioData * data, const std::vector<uint8_t> & memory) override final;
         virtual std::vector<std::string> GetSupportedFileExtensions() override final;

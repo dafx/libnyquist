@@ -131,6 +131,7 @@ int main(int argc, const char **argv) try
         myDevice.Play(fileData->samples);
     }
 #endif
+
     { // save to wave file
     
         AudioFile<float> a;
@@ -138,30 +139,20 @@ int main(int argc, const char **argv) try
         a.setNumSamplesPerChannel (fileData->samples.size() / fileData->channelCount);
         a.setSampleRate (fileData->sampleRate);
 
+        float sum = 0;
         for (int i = 0; i < fileData->channelCount; i++)
         {
             for (int j = 0; j < a.getNumSamplesPerChannel(); j++)
             {
                 a.samples[i][j] = (fileData->samples[j * fileData->channelCount + i]);
+                sum += a.samples[i][j];
             }
         }
+        printf("len: %ld sum: %f\n", fileData->samples.size(), sum);
+        assert("wrong results!" && int(sum) == 404 && fileData->samples.size() == 21472602);
 
         std::string filePath = "opusdec.wav"; // change this to somewhere useful for you
         a.save (filePath, AudioFileFormat::Wave);
-    }
-
-    // Test Opus Encoding
-    {
-        // Resample
-        std::vector<float> outputBuffer;
-
-        outputBuffer.reserve(fileData->samples.size() * 2);
-        linear_resample(fileData->sampleRate / 48000.0f, fileData->samples, outputBuffer, (uint32_t)fileData->samples.size());
-        std::cout << "Output Samples: " << outputBuffer.size() << std::endl;
-
-        fileData->samples = outputBuffer;
-        int encoderStatus = encode_opus_to_disk({ fileData->channelCount, PCM_FLT, DITHER_NONE }, fileData.get(), "libnyquist_example_output.opus");
-        std::cout << "Encoder Status: " << encoderStatus << std::endl;
     }
 
     return EXIT_SUCCESS;
