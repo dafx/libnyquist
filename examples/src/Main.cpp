@@ -15,8 +15,13 @@
 
 using namespace nqr;
 
+#include "../cuda/mdct_cuda.hpp"
+
 int main(int argc, const char **argv) try
 {
+    #ifdef USE_CUDA
+    printCudaVersion();
+    #endif
 
     const int desiredSampleRate = 44100;
     const int desiredChannelCount = 2;

@@ -30,14 +30,9 @@ endif()
 
 
 # libnyquist static library
-include(CheckLanguage)
-check_language(CUDA)
-if(CMAKE_CUDA_COMPILER)
-    enable_language(CUDA)
-    set(USE_CUDA ON)
+if(USE_CUDA)
     project(libnyquist LANGUAGES C CXX CUDA)
 else()
-    set(USE_CUDA OFF)
     project(libnyquist LANGUAGES C CXX)
 endif()
 
@@ -81,7 +76,7 @@ target_include_directories(libnyquist
 
 if (USE_CUDA)
   add_subdirectory(cuda)
-  target_compile_definitions(libnyquist PRIVATE USE_CUDA)
+  target_compile_definitions(libnyquist PUBLIC USE_CUDA)
 endif()
 
 if (ENABLE_CPU_PROFILING)
