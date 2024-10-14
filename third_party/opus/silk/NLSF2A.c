@@ -38,6 +38,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "SigProc_FIX.h"
 #include "tables.h"
 
+
+#ifdef QA
+#undef QA
+#endif
 #define QA      16
 
 /* helper function for NLSF2A(..) */

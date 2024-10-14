@@ -169,6 +169,10 @@ extern "C"
 #define N_RATE_LEVELS                           10
 
 /* Maximum sum of pulses per shell coding frame */
+
+#ifdef MAX_PULSES
+#undef MAX_PULSES
+#endif
 #define MAX_PULSES                              16
 
 #define MAX_MATRIX_SIZE                         MAX_LPC_ORDER /* Max of LPC Order and LTP order */
