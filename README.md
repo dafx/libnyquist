@@ -1,3 +1,7 @@
+# Try out the project!
+
+You can follow along with our current progress in parallelizing some of the code in this repository [in our Google Colab notebook.](https://colab.research.google.com/drive/1oZmEShLQmAJLfTIg7YdSW0XOEBJwE-RB#scrollTo=pX4TAMqqmyHM)
+
 # Libnyquist
 
 
