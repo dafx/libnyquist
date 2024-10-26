@@ -137,27 +137,26 @@ int main(int argc, const char **argv) try
     }
 #endif
 
-    { // save to wave file
-    
+    {  // save to wave file
         AudioFile<float> a;
-        a.setNumChannels (fileData->channelCount);
-        a.setNumSamplesPerChannel (fileData->samples.size() / fileData->channelCount);
-        a.setSampleRate (fileData->sampleRate);
+        a.setNumChannels(fileData->channelCount);
+        a.setNumSamplesPerChannel(fileData->samples.size() / fileData->channelCount);
+        a.setSampleRate(fileData->sampleRate);
 
         float sum = 0;
-        for (int i = 0; i < fileData->channelCount; i++)
-        {
-            for (int j = 0; j < a.getNumSamplesPerChannel(); j++)
-            {
+        for (int i = 0; i < fileData->channelCount; i++) {
+            for (int j = 0; j < a.getNumSamplesPerChannel(); j++) {
                 a.samples[i][j] = (fileData->samples[j * fileData->channelCount + i]);
                 sum += a.samples[i][j];
             }
         }
         printf("len: %ld sum: %f\n", fileData->samples.size(), sum);
-        assert("wrong results!" && int(sum) == 404 && fileData->samples.size() == 21472602);
-
-        std::string filePath = "opusdec.wav"; // change this to somewhere useful for you
-        a.save (filePath, AudioFileFormat::Wave);
+        if (static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602) {
+            printf("wrong results!\n");
+            return EXIT_FAILURE;
+        }
+        printf("decoding done, save to wave file\n");
+        a.save("opusdec.wav", AudioFileFormat::Wave);
     }
 
     return EXIT_SUCCESS;
