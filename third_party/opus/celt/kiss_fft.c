@@ -745,3 +745,8 @@ void opus_ifft(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *
         m = m2;
     }
 }
+
+int test_opus_ifft(int nfft, float *fin, float *fout)
+{
+    return 0;
+}

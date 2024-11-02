@@ -17,11 +17,21 @@ using namespace nqr;
 
 #include "../cuda/mdct_cuda.hpp"
 
+extern "C" int test_opus_ifft(int nfft, float *fin, float *fout);
+
 int main(int argc, const char **argv) try
 {
     #ifdef USE_CUDA
     printCudaVersion();
     #endif
+
+    {
+        int ret = test_opus_ifft(1024, nullptr, nullptr);
+        if (ret != 0) {
+            printf("test_opus_ifft failed with return code %d\n", ret);
+            return EXIT_FAILURE;
+        }
+    }
 
     const int desiredSampleRate = 44100;
     const int desiredChannelCount = 2;
@@ -77,7 +87,7 @@ int main(int argc, const char **argv) try
         //loader.Load(fileData.get(), "flac", memory.buffer); // broken
 
         // Single-channel opus
-        loader.Load(fileData.get(), "../../test_data/sb-reverie.opus"); // "Firefox: From All, To All"
+        loader.Load(fileData.get(), "test_data/sb-reverie.opus"); // "Firefox: From All, To All"
 
         // 1 + 2 channel wavpack
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Float32.wv");
