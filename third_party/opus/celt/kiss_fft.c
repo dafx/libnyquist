@@ -456,7 +456,7 @@ static void ki_bfly5(
 
 #endif
 
-#ifdef CUSTOM_MODES
+#if defined(CUSTOM_MODES) || defined(ENABLE_FFT_TEST)
 
 static void compute_bitrev_table(
     int Fout,
@@ -748,5 +748,22 @@ void opus_ifft(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *
 
 int test_opus_ifft(int nfft, float *fin, float *fout)
 {
+    int i;
+
+    kiss_fft_cpx *cfin = (kiss_fft_cpx *)malloc(nfft * sizeof(kiss_fft_cpx));  // NOLINT
+    kiss_fft_cpx *cfout = (kiss_fft_cpx *)malloc(nfft * sizeof(kiss_fft_cpx)); // NOLINT
+
+    for (i = 0; i < nfft; i++) {
+        cfin[i].r = fin[2 * i];
+        cfin[i].i = fin[2 * i + 1];
+    }
+
+    kiss_fft_state* st = opus_fft_alloc(nfft, NULL, NULL);
+    opus_ifft(st, cfin, cfout);
+
+    for (i = 0; i < nfft; i++) {
+        fout[2 * i] = cfout[i].r;
+        fout[2 * i + 1] = cfout[i].i;
+    }
     return 0;
 }

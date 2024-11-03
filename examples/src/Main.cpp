@@ -26,10 +26,14 @@ int main(int argc, const char **argv) try
     #endif
 
     {
-        int ret = test_opus_ifft(1024, nullptr, nullptr);
-        if (ret != 0) {
-            printf("test_opus_ifft failed with return code %d\n", ret);
-            return EXIT_FAILURE;
+        {
+            std::vector<float> input = {1, 2, 3, 4, 5, 6, 7, 8};
+            std::vector<float> output(8);
+            int ret = test_opus_ifft(4, input.data(), output.data());
+            if (ret != 0) {
+                printf("test_opus_ifft failed with return code %d\n", ret);
+                return EXIT_FAILURE;
+            }
         }
     }
 

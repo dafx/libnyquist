@@ -34,6 +34,7 @@ if(USE_CUDA)
     project(libnyquist LANGUAGES C CXX CUDA)
 else()
     project(libnyquist LANGUAGES C CXX)
+    add_compile_definitions(ENABLE_FFT_TEST)
 endif()
 
 file(GLOB nyquist_include "${LIBNYQUIST_ROOT}/include/libnyquist/*")
