@@ -215,8 +215,12 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
                        kiss_fft_scalar *OPUS_RESTRICT out,
                        const opus_val16 *OPUS_RESTRICT window, int overlap,
                        int shift, int stride) {
-  int i;
-  int N, N2, N4;
+  #ifdef USE_CUDA
+    // Call CUDA optimized version
+    mdctBackwardWithCuda(in, out, l->trig, window, l->n, overlap, shift, stride);
+  #else
+    int i;
+    int N, N2, N4;
 
   #if MDCT_PROFILE
   // for timer
@@ -343,4 +347,5 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
     }
   }
   RESTORE_STACK;
+  #endif
 }

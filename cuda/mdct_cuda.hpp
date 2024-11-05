@@ -8,10 +8,11 @@ extern "C" {
 #define var_t float
 #endif
 
-void doPreRotation(const float *input, float *output, int N);
-void preRotateWithCuda(const var_t *host_xp1, var_t *host_yp,
-                       const var_t *host_t, int N, int shift, int stride,
-                       var_t sine);
+// Remove old function declarations
+void mdctBackwardWithCuda(const var_t *in, var_t *out, 
+                         const var_t *trig, const var_t *window,
+                         int N, int overlap, int shift, int stride);
+
 void printCudaVersion();
 
 #ifdef __cplusplus
