@@ -47,3 +47,7 @@ DerivedData
 encoded.wav
 .vscode
 out
+.cache/clangd/index
+.cache/
+*.~undo-tree~
+*~

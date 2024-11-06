@@ -88,7 +88,7 @@ int clt_mdct_init(mdct_lookup *l, int N, int maxshift) {
 #if defined(FIXED_POINT)
   for (i = 0; i <= N4; i++)
     trig[i] = TRIG_UPSCALE *
-              celt_cos_norm(DIV32(ADD32(SHL32(EXTEND32(i), 17), N2), N));
+	      celt_cos_norm(DIV32(ADD32(SHL32(EXTEND32(i), 17), N2), N));
 #else
   for (i = 0; i <= N4; i++)
     trig[i] = (kiss_twiddle_scalar)cos(2 * PI * i / N);
@@ -107,9 +107,9 @@ void clt_mdct_clear(mdct_lookup *l) {
 
 /* Forward MDCT trashes the input array */
 void clt_mdct_forward(const mdct_lookup *l, kiss_fft_scalar *in,
-                      kiss_fft_scalar *OPUS_RESTRICT out,
-                      const opus_val16 *window, int overlap, int shift,
-                      int stride) {
+		      kiss_fft_scalar *OPUS_RESTRICT out,
+		      const opus_val16 *window, int overlap, int shift,
+		      int stride) {
   int i;
   int N, N2, N4;
   kiss_twiddle_scalar sine;
@@ -212,30 +212,41 @@ void clt_mdct_forward(const mdct_lookup *l, kiss_fft_scalar *in,
 #include "../../../cuda/mdct_cuda.hpp"
 
 void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
-                       kiss_fft_scalar *OPUS_RESTRICT out,
-                       const opus_val16 *OPUS_RESTRICT window, int overlap,
-                       int shift, int stride) {
-  #ifdef USE_CUDA
-    // Call CUDA optimized version
-    mdctBackwardWithCuda(in, out, l->trig, window, l->n, overlap, shift, stride);
-  #else
-    int i;
-    int N, N2, N4;
+		       kiss_fft_scalar *OPUS_RESTRICT out,
+		       const opus_val16 *OPUS_RESTRICT window, int overlap,
+		       int shift, int stride) {
 
-  #if MDCT_PROFILE
+#ifdef USE_CUDA
+  // Call CUDA optimized version
+  mdctBackwardWithCuda(in, out, l->trig, window, l->n, overlap, shift, stride);
+#else
+  int i;
+  int N, N2, N4;
+
+#if MDCT_PROFILE
   // for timer
   struct timespec start, stop;
-  #endif
+#endif
 
-  kiss_twiddle_scalar sine;
-  VARDECL(kiss_fft_scalar, f2);
-  SAVE_STACK;
-  N = l->n;
-  N >>= shift;
-  N2 = N >> 1;
-  N4 = N >> 2;
-  ALLOC(f2, N2, kiss_fft_scalar);
-  /* sin(x) ~= x here */
+kiss_twiddle_scalar sine;
+VARDECL(kiss_fft_scalar, f2);
+SAVE_STACK;
+N = l->n;
+N >>= shift;
+N2 = N >> 1;
+N4 = N >> 2;
+ALLOC(f2, N2, kiss_fft_scalar);
+
+#if 0
+// just for debug
+printf("l length is %d\n", l->n);
+printf("N is %d\n", N);
+printf("shift is %d\n", shift);
+printf("overlap is %d\n", overlap);
+printf("stride is %d\n", stride);
+#endif
+
+/* sin(x) ~= x here */
 #ifdef FIXED_POINT
   sine = TRIG_UPSCALE * (QCONST16(0.7853981f, 15) + N2) / N;
 #else
@@ -288,7 +299,7 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   /* Inverse N/4 complex FFT. This one should *not* downscale even in
    * fixed-point */
   opus_ifft(l->kfft[shift], (kiss_fft_cpx *)f2,
-            (kiss_fft_cpx *)(out + (overlap >> 1)));
+	    (kiss_fft_cpx *)(out + (overlap >> 1)));
 
   /* Post-rotate and de-shuffle from both ends of the buffer at once to make
      it in-place. */
