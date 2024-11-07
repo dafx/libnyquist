@@ -179,22 +179,27 @@ void mdctBackwardWithCuda(const var_t *in, var_t *out, const var_t *trig,
   preRotationKernel<<<numBlocks, blockSize>>>(d_in, d_f2, d_trig,
 					      N, N2, N4, shift,
 					      stride, sine);
+  CHECK_CUDA(cudaDeviceSynchronize());
 
   // 2. IFFT using cuFFT
   cufftExecC2C(plan, (cufftComplex*)d_f2,
 	       (cufftComplex*)(d_out + (overlap >> 1)),
 	       CUFFT_INVERSE);
 
+  CHECK_CUDA(cudaDeviceSynchronize());
+
   // 3. Post-rotation
   numBlocks = ((N4 + 1) >> 1 + blockSize - 1) / blockSize;
   postRotationKernel<<<numBlocks, blockSize>>>(d_out, d_f2, d_trig,
 					       N, N2, N4, overlap,
 					       shift, sine);
+  CHECK_CUDA(cudaDeviceSynchronize());
 
   // 4. Mirror
   numBlocks = (overlap/2 + blockSize - 1) / blockSize;
   mirrorKernel<<<numBlocks, blockSize>>>(d_out, d_window,
 					 N, overlap);
+  CHECK_CUDA(cudaDeviceSynchronize());
 
   // Copy result back to host
   CHECK_CUDA(cudaMemcpy(out, d_out, out_size, cudaMemcpyDeviceToHost));
