@@ -27,6 +27,7 @@ set_target_properties(libnyquist_cuda PROPERTIES
 )
 
 # Link necessary libraries (if any)
-# target_link_libraries(libnyquist_cuda some_other_library)
+target_link_libraries(libnyquist_cuda cufft)
+
 add_executable(libnyquist_cuda_test test.cpp)
 target_link_libraries(libnyquist_cuda_test libnyquist_cuda)
