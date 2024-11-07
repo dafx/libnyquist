@@ -251,7 +251,7 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
     clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
 
-#ifdef USE_CUDA
+#ifdef USE_CUDA_DDDDDD
     // doPreRotation(xp1, yp, N4);
     preRotateWithCuda(xp1, yp, t, N, shift, stride, sine);
 #else
@@ -286,12 +286,20 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   opus_ifft(l->kfft[shift], (kiss_fft_cpx *)f2,
             (kiss_fft_cpx *)(out + (overlap >> 1)));
 
+
+  // post and mirror will be done in cuda
+  #ifdef USE_CUDA
+    postAndMirrorWithCuda(out, &l->trig[0], N2, N4, shift, stride, sine, overlap, window);
+  #else
+
   /* Post-rotate and de-shuffle from both ends of the buffer at once to make
      it in-place. */
   {
     kiss_fft_scalar *OPUS_RESTRICT yp0 = out + (overlap >> 1);
     kiss_fft_scalar *OPUS_RESTRICT yp1 = out + (overlap >> 1) + N2 - 2;
     const kiss_twiddle_scalar *t = &l->trig[0];
+
+
     /* Loop to (N4+1)>>1 to handle odd N4. When N4 is odd, the
        middle pair will be computed twice. */
     for (i = 0; i < (N4 + 1) >> 1; i++) {
@@ -342,5 +350,6 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
       wp2--;
     }
   }
+  #endif
   RESTORE_STACK;
 }
