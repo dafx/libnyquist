@@ -3,6 +3,12 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
+#ifdef DEBUG_MODE
+    #define DEBUG_PRINT(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
+#else
+    #define DEBUG_PRINT(fmt, ...) // do nothing
+#endif
+
 #ifndef S_MUL
 #define S_MUL(a, b) ((a) * (b))
 #endif
@@ -10,9 +16,7 @@
 #define CHECK_CUDA_ERROR(call) do { \
     cudaError_t err = call; \
     if (err != cudaSuccess) { \
-        fprintf(stderr, "CUDA error in %s:%d: %s\n", \
-                __FILE__, __LINE__, \
-                cudaGetErrorString(err)); \
+        DEBUG_PRINT("CUDA error in %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
         exit(EXIT_FAILURE); \
     } \
 } while(0)
@@ -20,9 +24,7 @@
 #define CHECK_LAST_CUDA_ERROR() do { \
     cudaError_t err = cudaGetLastError(); \
     if (err != cudaSuccess) { \
-        fprintf(stderr, "CUDA error in %s:%d: %s\n", \
-                __FILE__, __LINE__, \
-                cudaGetErrorString(err)); \
+        DEBUG_PRINT("CUDA error in %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
         exit(EXIT_FAILURE); \
     } \
 } while(0)
@@ -91,7 +93,6 @@ void preRotateWithCuda(const var_t *host_xp1, var_t *host_yp,
   cudaFree(dev_t);
 }
 
-
 __global__ void postRotationKernel(var_t *d_out, 
                                  const var_t *t, 
                                  int N2, int N4, 
@@ -159,7 +160,6 @@ __global__ void mirrorKernel(var_t *d_out,
     }
 }
 
-
 void postAndMirrorWithCuda(var_t *out, const var_t *t, int N2, int N4, int shift, 
                           int stride, var_t sine, int overlap, const var_t *window) {
     var_t *d_out, *d_t, *d_window;
@@ -204,18 +204,16 @@ void postAndMirrorWithCuda(var_t *out, const var_t *t, int N2, int N4, int shift
     cudaFree(d_window);
 }
 
-
-
 void printCudaVersion() {
-  std::cout << "CUDA Compiled version: " << __CUDACC_VER_MAJOR__ << std::endl;
+    DEBUG_PRINT("CUDA Compiled version: %d\n", __CUDACC_VER_MAJOR__);
 
-  int runtime_ver;
-  cudaRuntimeGetVersion(&runtime_ver);
-  std::cout << "CUDA Runtime version: " << runtime_ver << std::endl;
+    int runtime_ver;
+    cudaRuntimeGetVersion(&runtime_ver);
+    DEBUG_PRINT("CUDA Runtime version: %d\n", runtime_ver);
 
-  int driver_ver;
-  cudaDriverGetVersion(&driver_ver);
-  std::cout << "CUDA Driver version: " << driver_ver << std::endl;
+    int driver_ver;
+    cudaDriverGetVersion(&driver_ver);
+    DEBUG_PRINT("CUDA Driver version: %d\n", driver_ver);
 }
 
 
