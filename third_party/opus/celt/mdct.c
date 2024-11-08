@@ -251,10 +251,12 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
     clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
 
-#ifdef USE_CUDA_DDDDDD
+#ifdef USE_CUDA
     // doPreRotation(xp1, yp, N4);
+    fprintf(stdout, "use cuda preRotation\n");
     preRotateWithCuda(xp1, yp, t, N, shift, stride, sine);
 #else
+    fprintf(stdout, "use kiss preRotation\n");
     for (i = 0; i < N4; i++) {
       kiss_fft_scalar yr, yi;
       yr = -S_MUL(*xp2, t[i << shift]) + S_MUL(*xp1, t[(N4 - i) << shift]);
@@ -281,17 +283,25 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
 
   }
 
-  /* Inverse N/4 complex FFT. This one should *not* downscale even in
-   * fixed-point */
-  opus_ifft(l->kfft[shift], (kiss_fft_cpx *)f2,
+  #ifdef USE_CUDA
+    fprintf(stdout, "use cuda fft\n");
+    cuda_fft_state *state = cuda_fft_alloc(N4, shift);
+    cuda_fft_execute(state, f2, out + (overlap >> 1));
+    cuda_fft_free(state) ;
+  #else
+    fprintf(stdout, "use kiss fft\n");
+    /* Inverse N/4 complex FFT. This one should *not* downscale even in
+     * fixed-point */
+    opus_ifft(l->kfft[shift], (kiss_fft_cpx *)f2,
             (kiss_fft_cpx *)(out + (overlap >> 1)));
-
+#endif
 
   // post and mirror will be done in cuda
   #ifdef USE_CUDA
+    fprintf(stdout, "use cuda postAndMirror\n");
     postAndMirrorWithCuda(out, &l->trig[0], N2, N4, shift, stride, sine, overlap, window);
   #else
-
+    fprintf(stdout, "use kiss postAndMirror\n");
   /* Post-rotate and de-shuffle from both ends of the buffer at once to make
      it in-place. */
   {

@@ -12,6 +12,7 @@ set(CMAKE_CUDA_ARCHITECTURES 52 60 61 70 75 80)
 # Add the source files for the library
 set(SOURCES
     mdct_cuda.cu
+    fft.cu
 )
 
 # Create the CUDA library
@@ -28,5 +29,6 @@ set_target_properties(libnyquist_cuda PROPERTIES
 
 # Link necessary libraries (if any)
 # target_link_libraries(libnyquist_cuda some_other_library)
+target_link_libraries(libnyquist_cuda cufft)
 add_executable(libnyquist_cuda_test test.cpp)
 target_link_libraries(libnyquist_cuda_test libnyquist_cuda)
