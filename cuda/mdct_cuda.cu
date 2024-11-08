@@ -195,7 +195,7 @@ void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N
     int blockSize = 512; // Number of threads per block
     int numBlocks = (N4 + blockSize - 1) / blockSize; // Number of blocks, ensuring full coverage
     fprintf(stderr, "numBlocks: %d\n", numBlocks);
-    doPreRotation<<<numBlocks, blockSize>>>(dev_input, dev_fft, dev_t, N2, shift, stride, N2, sine);
+    doPreRotation<<<numBlocks, blockSize>>>(dev_input, dev_fft, dev_t, N4, shift, stride, N2, sine);
     cudaDeviceSynchronize();
 
     // Execute IFFT
@@ -209,10 +209,13 @@ void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N
 
     result = cufftExecC2C(plan, (cufftComplex *)dev_fft, (cufftComplex *)(dev_output + (overlap >> 1)), CUFFT_INVERSE);
 
+
     if (result != CUFFT_SUCCESS) {
         fprintf(stderr, "Error executing IFFT\n");
         exit(EXIT_FAILURE);
     }
+
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cufftDestroy(plan);
     
     // Post-rotation kernel
