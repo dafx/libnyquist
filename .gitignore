@@ -47,3 +47,4 @@ DerivedData
 encoded.wav
 .vscode
 out
+.cache

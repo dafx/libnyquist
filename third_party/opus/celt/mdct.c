@@ -57,6 +57,13 @@
 #include <time.h>
 #endif
 
+#define DEBUG_MODE
+
+#ifdef DEBUG_MODE
+#define DEBUG_PRINT(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
+#else
+#define DEBUG_PRINT(fmt, ...) // do nothing
+#endif
 
 #ifdef CUSTOM_MODES
 
@@ -211,6 +218,22 @@ void clt_mdct_forward(const mdct_lookup *l, kiss_fft_scalar *in,
 
 #include "../../../cuda/mdct_cuda.hpp"
 
+
+
+#ifdef USE_CUDA
+
+void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
+                       kiss_fft_scalar *OPUS_RESTRICT out,
+                       const opus_val16 *OPUS_RESTRICT window, int overlap,
+                       int shift, int stride) {
+  int N = l->n;
+  N >>= shift;
+  //just consider the float version
+  kiss_twiddle_scalar sine = (kiss_twiddle_scalar)2 * PI *(.125f) / N;
+  processMDCTCuda(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
+}
+
+#else
 void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
                        kiss_fft_scalar *OPUS_RESTRICT out,
                        const opus_val16 *OPUS_RESTRICT window, int overlap,
@@ -233,9 +256,10 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   ALLOC(f2, N2, kiss_fft_scalar);
   /* sin(x) ~= x here */
 #ifdef FIXED_POINT
+  fprintf(stderr, "use fixed point\n");
   sine = TRIG_UPSCALE * (QCONST16(0.7853981f, 15) + N2) / N;
 #else
-  sine = (kiss_twiddle_scalar)2 * PI * (.125f) / N;
+  sine = (kiss_twiddle_scalar)2 * PI *(.125f) / N;
 #endif
 
   /* Pre-rotate */
@@ -246,15 +270,6 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
     kiss_fft_scalar *OPUS_RESTRICT yp = f2;
     const kiss_twiddle_scalar *t = &l->trig[0];
 
-#if MDCT_PROFILE
-    // Start timing
-    clock_gettime(CLOCK_MONOTONIC, &start);
-#endif
-
-#ifdef USE_CUDA
-    // doPreRotation(xp1, yp, N4);
-    preRotateWithCuda(xp1, yp, t, N, shift, stride, sine);
-#else
     for (i = 0; i < N4; i++) {
       kiss_fft_scalar yr, yi;
       yr = -S_MUL(*xp2, t[i << shift]) + S_MUL(*xp1, t[(N4 - i) << shift]);
@@ -265,26 +280,12 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
       xp1 += 2 * stride;
       xp2 -= 2 * stride;
     }
-#endif
-#if MDCT_PROFILE
-     // Stop timing
-    clock_gettime(CLOCK_MONOTONIC, &stop);
-
-    // Calculate the elapsed time in microseconds
-    long seconds = stop.tv_sec - start.tv_sec;
-    long nanoseconds = stop.tv_nsec - start.tv_nsec;
-    double elapsed = seconds * 1000000 + nanoseconds / 1000.0;  // Convert to microseconds
-
-    // Print the elapsed time in microseconds
-    printf("Time taken by preRotation: %.3f microseconds\n", elapsed);
-#endif
-
   }
-
-  /* Inverse N/4 complex FFT. This one should *not* downscale even in
-   * fixed-point */
-  opus_ifft(l->kfft[shift], (kiss_fft_cpx *)f2,
+    /* Inverse N/4 complex FFT. This one should *not* downscale even in
+     * fixed-point */
+    opus_ifft(l->kfft[shift], (kiss_fft_cpx *)f2,
             (kiss_fft_cpx *)(out + (overlap >> 1)));
+
 
   /* Post-rotate and de-shuffle from both ends of the buffer at once to make
      it in-place. */
@@ -292,6 +293,8 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
     kiss_fft_scalar *OPUS_RESTRICT yp0 = out + (overlap >> 1);
     kiss_fft_scalar *OPUS_RESTRICT yp1 = out + (overlap >> 1) + N2 - 2;
     const kiss_twiddle_scalar *t = &l->trig[0];
+
+
     /* Loop to (N4+1)>>1 to handle odd N4. When N4 is odd, the
        middle pair will be computed twice. */
     for (i = 0; i < (N4 + 1) >> 1; i++) {
@@ -344,3 +347,4 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   }
   RESTORE_STACK;
 }
+#endif
