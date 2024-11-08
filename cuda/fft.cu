@@ -2,18 +2,6 @@
 #include <stdio.h>
 #include "mdct_cuda.hpp"
 
-// CUDA kernel for post-processing
-__global__ void postProcessKernel(cufftComplex *data, int nfft, int shift) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < nfft) {
-        // Apply scaling factor
-        if (shift > 0) {
-            data[idx].x *= (1 << shift);
-            data[idx].y *= (1 << shift);
-        }
-    }
-}
-
 
 // Initialization function
 cuda_fft_state* cuda_fft_alloc(int nfft, int shift) {

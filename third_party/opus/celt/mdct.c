@@ -225,15 +225,7 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   int i;
   int N, N2, N4;
 
-  #if 1
-    N = l->n;
-    N >>= shift;  //be careful here!! will cause memory boundary
-    // error if N is not right shifted
-    kiss_twiddle_scalar sine = (kiss_twiddle_scalar)2 * PI * (.125f) / N;
-    DEBUG_PRINT("use cuda mdct\n");
-    processMDCTCuda(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
-  #else
-    DEBUG_PRINT("use kiss mdct\n");
+  
   #if MDCT_PROFILE
   // for timer
   struct timespec start, stop;
@@ -249,10 +241,20 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   ALLOC(f2, N2, kiss_fft_scalar);
   /* sin(x) ~= x here */
 #ifdef FIXED_POINT
+  fprintf(stderr, "use fixed point\n");
   sine = TRIG_UPSCALE * (QCONST16(0.7853981f, 15) + N2) / N;
 #else
-  sine = (kiss_twiddle_scalar)2 * PI * (.125f) / N;
+  sine = (kiss_twiddle_scalar)2 * PI *(.125f) / N;
 #endif
+
+
+#if 1
+    processMDCTCuda(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
+#else
+    processMDCTCPU(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
+#endif
+
+    return;
 
   /* Pre-rotate */
   {
@@ -378,5 +380,4 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   }
   #endif
   RESTORE_STACK;
-  #endif
 }
