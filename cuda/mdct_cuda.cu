@@ -1,13 +1,7 @@
 #include "mdct_cuda.hpp"
-
 #include <cuda_runtime.h>
+#include <cufft.h>
 #include <iostream>
-
-#ifdef DEBUG_MODE
-    #define DEBUG_PRINT(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
-#else
-    #define DEBUG_PRINT(fmt, ...) // do nothing
-#endif
 
 #ifndef S_MUL
 #define S_MUL(a, b) ((a) * (b))
@@ -16,7 +10,7 @@
 #define CHECK_CUDA_ERROR(call) do { \
     cudaError_t err = call; \
     if (err != cudaSuccess) { \
-        DEBUG_PRINT("CUDA error in %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+        fprintf(stderr, "CUDA error in %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
         exit(EXIT_FAILURE); \
     } \
 } while(0)
@@ -24,7 +18,7 @@
 #define CHECK_LAST_CUDA_ERROR() do { \
     cudaError_t err = cudaGetLastError(); \
     if (err != cudaSuccess) { \
-        DEBUG_PRINT("CUDA error in %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+        fprintf(stderr, "CUDA error in %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
         exit(EXIT_FAILURE); \
     } \
 } while(0)
@@ -160,60 +154,92 @@ __global__ void mirrorKernel(var_t *d_out,
     }
 }
 
-void postAndMirrorWithCuda(var_t *out, const var_t *t, int N2, int N4, int shift, 
-                          int stride, var_t sine, int overlap, const var_t *window) {
-    var_t *d_out, *d_t, *d_window;
-    
-    // Allocate memory
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_out, (N2 + overlap) * sizeof(var_t)));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_t, (N4 << shift) * sizeof(var_t)));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_window, overlap * sizeof(var_t)));
-    
-    // Copy input data
-    CHECK_CUDA_ERROR(cudaMemcpy(d_out, out, (N2 + overlap) * sizeof(var_t), 
-                               cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_t, t, (N4 << shift) * sizeof(var_t), 
-                               cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_window, window, overlap * sizeof(var_t), 
-                               cudaMemcpyHostToDevice));
-    
-    const int blockSize = 256;
-    
-    // post-rotation kernel
-    int numElementsRotation = (N4 + 1) >> 1;
-    int numBlocksRotation = (numElementsRotation + blockSize - 1) / blockSize;
-    postRotationKernel<<<numBlocksRotation, blockSize>>>(d_out, d_t, N2, N4, 
-                                                      shift, sine, overlap);
-    CHECK_LAST_CUDA_ERROR();
-    cudaDeviceSynchronize();
-    
-    // mirror kernel
-    int numElementsMirror = overlap / 2;
-    int numBlocksMirror = (numElementsMirror + blockSize - 1) / blockSize;
-    mirrorKernel<<<numBlocksMirror, blockSize>>>(d_out, d_window, overlap);
-    CHECK_LAST_CUDA_ERROR();
-    cudaDeviceSynchronize();
-    
-    // Copy results
-    CHECK_CUDA_ERROR(cudaMemcpy(out, d_out, (N2 + overlap) * sizeof(var_t), 
-                               cudaMemcpyDeviceToHost));
-    
-    // Cleanup
-    cudaFree(d_out);
-    cudaFree(d_t);
-    cudaFree(d_window);
-}
-
 void printCudaVersion() {
-    DEBUG_PRINT("CUDA Compiled version: %d\n", __CUDACC_VER_MAJOR__);
+    fprintf(stderr, "CUDA Compiled version: %d\n", __CUDACC_VER_MAJOR__);
 
     int runtime_ver;
     cudaRuntimeGetVersion(&runtime_ver);
-    DEBUG_PRINT("CUDA Runtime version: %d\n", runtime_ver);
+    fprintf(stderr, "CUDA Runtime version: %d\n", runtime_ver);
 
     int driver_ver;
     cudaDriverGetVersion(&driver_ver);
-    DEBUG_PRINT("CUDA Driver version: %d\n", driver_ver);
+    fprintf(stderr, "CUDA Driver version: %d\n", driver_ver);
+}
+
+// New end-to-end function
+void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window) {
+    int N2 = N >> 1;
+    int N4 = N >> 2;
+
+    // Device pointers
+    var_t *dev_input, *dev_output, *dev_t, *dev_window, *dev_fft;
+    size_t size_input = N2 * stride * sizeof(var_t);
+    size_t size_output = (N2 + overlap) * sizeof(var_t);
+    size_t size_fft = N2 * sizeof(var_t);
+    size_t size_trig = (N4 << shift) * sizeof(var_t);
+    size_t size_window = overlap * sizeof(var_t);
+
+    // Allocate memory on the device (GPU)
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_input, size_input));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_output, size_output));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_t, size_trig));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_window, size_window));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_fft, size_fft));
+
+    // Copy input data from host (CPU) to device (GPU)
+    CHECK_CUDA_ERROR(cudaMemcpy(dev_input, input, size_input, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(dev_t, trig, size_trig, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(dev_window, window, size_window, cudaMemcpyHostToDevice));
+
+    // Launch the pre-rotation kernel
+    int blockSize = 512; // Number of threads per block
+    int numBlocks = (N4 + blockSize - 1) / blockSize; // Number of blocks, ensuring full coverage
+    fprintf(stderr, "numBlocks: %d\n", numBlocks);
+    doPreRotation<<<numBlocks, blockSize>>>(dev_input, dev_fft, dev_t, N2, shift, stride, N2, sine);
+    cudaDeviceSynchronize();
+
+    // Execute IFFT
+    cufftHandle plan;
+    cufftResult result;
+    result = cufftPlan1d(&plan, N4, CUFFT_C2C, 1);
+    if (result != CUFFT_SUCCESS) {
+        fprintf(stderr, "Error creating FFT plan\n");
+        exit(EXIT_FAILURE);
+    }
+
+    result = cufftExecC2C(plan, (cufftComplex *)dev_fft, (cufftComplex *)(dev_output + (overlap >> 1)), CUFFT_INVERSE);
+
+    if (result != CUFFT_SUCCESS) {
+        fprintf(stderr, "Error executing IFFT\n");
+        exit(EXIT_FAILURE);
+    }
+    cufftDestroy(plan);
+    
+    // Post-rotation kernel
+    int numElementsRotation = (N4 + 1) >> 1;
+    int numBlocksRotation = (numElementsRotation + blockSize - 1) / blockSize;
+    fprintf(stderr, "numBlockRotation: %d\n", numBlocksRotation);
+    postRotationKernel<<<numBlocksRotation, blockSize>>>(dev_output, dev_t, N2, N4, shift, sine, overlap);
+    CHECK_LAST_CUDA_ERROR();
+    cudaDeviceSynchronize();
+
+    // Mirror kernel
+    int numElementsMirror = overlap / 2;
+    int numBlocksMirror = (numElementsMirror + blockSize - 1) / blockSize;
+    fprintf(stderr, "numBlockMirror: %d\n", numBlocksMirror);
+    mirrorKernel<<<numBlocksMirror, blockSize>>>(dev_output, dev_window, overlap);
+    CHECK_LAST_CUDA_ERROR();
+    cudaDeviceSynchronize();
+
+    // Copy results back to host
+    CHECK_CUDA_ERROR(cudaMemcpy(output, dev_output, size_output, cudaMemcpyDeviceToHost));
+
+    // Cleanup
+    cudaFree(dev_t);
+    cudaFree(dev_window);
+    cudaFree(dev_input);
+    cudaFree(dev_output);
+    cudaFree(dev_fft);
 }
 
 

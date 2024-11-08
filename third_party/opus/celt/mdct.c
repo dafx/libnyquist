@@ -57,6 +57,8 @@
 #include <time.h>
 #endif
 
+#define DEBUG_MODE
+
 #ifdef DEBUG_MODE
 #define DEBUG_PRINT(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
 #else
@@ -223,6 +225,15 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   int i;
   int N, N2, N4;
 
+  #if 1
+    N = l->n;
+    N >>= shift;  //be careful here!! will cause memory boundary
+    // error if N is not right shifted
+    kiss_twiddle_scalar sine = (kiss_twiddle_scalar)2 * PI * (.125f) / N;
+    DEBUG_PRINT("use cuda mdct\n");
+    processMDCTCuda(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
+  #else
+    DEBUG_PRINT("use kiss mdct\n");
   #if MDCT_PROFILE
   // for timer
   struct timespec start, stop;
@@ -367,4 +378,5 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
   }
   #endif
   RESTORE_STACK;
+  #endif
 }

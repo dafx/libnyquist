@@ -31,6 +31,9 @@ void preRotateWithCuda(const var_t *host_xp1, var_t *host_yp,
 void printCudaVersion();
 void postAndMirrorWithCuda(var_t *out, const var_t *host_t, int N2, int N4, int shift, int stride, var_t sine, int overlap, const var_t *window);	
 
+// New function declaration
+void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window);
+
 #ifdef __cplusplus
 }
 #endif
