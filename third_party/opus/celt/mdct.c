@@ -251,7 +251,7 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
 #if 1
     processMDCTCuda(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
 #else
-    processMDCTCPU(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
+    processMDCTSeparate(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
 #endif
 
     return;

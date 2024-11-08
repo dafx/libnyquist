@@ -166,9 +166,6 @@ void printCudaVersion() {
     fprintf(stderr, "CUDA Driver version: %d\n", driver_ver);
 }
 
-
-
-
 void postAndMirrorWithCuda(var_t *out, const var_t *t, int N2, int N4, int shift, 
                           int stride, var_t sine, int overlap, const var_t *window) {
     var_t *d_out, *d_t, *d_window;
@@ -223,75 +220,28 @@ void postAndMirrorWithCuda(var_t *out, const var_t *t, int N2, int N4, int shift
 
 
 
-void processMDCTCPU(const var_t *input, var_t *output, const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window) {
+void processMDCTSeparate(const var_t *input, var_t *output, const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window) {
     int N2 = N >> 1;
     int N4 = N >> 2;
     var_t *f2 = (var_t *)malloc(N4 * 2 * sizeof(var_t));
 
-    printf("\n=== CPU Processing Start ===\n");
-    printf("Parameters: N=%d, N2=%d, N4=%d, shift=%d, stride=%d, sine=%f, overlap=%d\n", 
-           N, N2, N4, shift, stride, sine, overlap);
-
-    // Print first few input values
-    printf("First 4 input values: %f, %f, %f, %f\n", 
-           input[0], input[1], input[2], input[3]);
-
-
-    printf("first 4 output values: %f, %f, %f, %f\n", 
-           output[0], output[1], output[2], output[3]);
-
-    printf("first 4 trig values: %f, %f, %f, %f\n",
-           trig[0], trig[1], trig[2], trig[3]);
-
-    printf("first 4 window values: %f, %f, %f, %f\n",
-           window[0], window[1], window[2], window[3]);
-
     // pre-rotation
-    printf("\nCPU: Before pre-rotation\n");
     preRotateWithCuda(input, f2, trig, N, shift, stride, sine);
-    printf("First 4 f2 values after pre-rotation: %f, %f, %f, %f\n", 
-           f2[0], f2[1], f2[2], f2[3]);
-
+    
     // ifft
-    printf("\nCPU: Before FFT\n");
     cuda_fft_state *state = cuda_fft_alloc(N4, shift);
     cuda_fft_execute(state, f2, output + (overlap >> 1));
-    printf("First 4 output values after FFT: %f, %f, %f, %f\n", 
-           output[overlap>>1], output[(overlap>>1)+1], output[(overlap>>1)+2], output[(overlap>>1)+3]);
     cuda_fft_free(state);
 
     // post-rotation and mirror
-    printf("\nCPU: Before post-rotation and mirror\n");
     postAndMirrorWithCuda(output, trig, N2, N4, shift, stride, sine, overlap, window);
-    printf("First 4 final output values: %f, %f, %f, %f\n", 
-           output[0], output[1], output[2], output[3]);
-
     free(f2);
-    printf("=== CPU Processing End ===\n\n");
 }
 
 void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N, 
                      int shift, int stride, var_t sine, int overlap, const var_t *window) {
     int N2 = N >> 1;
     int N4 = N >> 2;
-
-    printf("\n=== CUDA Processing Start ===\n");
-    printf("Parameters: N=%d, N2=%d, N4=%d, shift=%d, stride=%d, sine=%f, overlap=%d\n", 
-           N, N2, N4, shift, stride, sine, overlap);
-
-    // Print first few input values
-    printf("first 4 input values: %f, %f, %f, %f\n", 
-           input[0], input[1], input[2], input[3]);
-
-
-    printf("first 4 output values: %f, %f, %f, %f\n", 
-           output[0], output[1], output[2], output[3]);
-
-    printf("first 4 trig values: %f, %f, %f, %f\n",
-           trig[0], trig[1], trig[2], trig[3]);
-
-    printf("first 4 window values: %f, %f, %f, %f\n",
-           window[0], window[1], window[2], window[3]);
 
     // Device pointers and memory allocation
     var_t *dev_input, *dev_output, *dev_t, *dev_window, *dev_f2;
@@ -308,27 +258,19 @@ void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N
     CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_window, size_window));
     CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_f2, size_fft));
 
+    // make sure to copy output to device !!!
     CHECK_CUDA_ERROR(cudaMemcpy(dev_output, output, size_output, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(dev_input, input, size_input, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(dev_t, trig, size_trig, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(dev_window, window, size_window, cudaMemcpyHostToDevice));
 
     // Pre-rotation
-    printf("\nCUDA: Before pre-rotation\n");
     int blockSize = 256;
     int numBlocks = (N4 + blockSize - 1) / blockSize;
     doPreRotation<<<numBlocks, blockSize>>>(dev_input, dev_f2, dev_t, N4, shift, stride, N2, sine);
     cudaDeviceSynchronize();
-
-    // Debug: Copy back f2 to check intermediate results
-    var_t *temp_f2 = (var_t *)malloc(size_fft);
-    cudaMemcpy(temp_f2, dev_f2, size_fft, cudaMemcpyDeviceToHost);
-    printf("First 4 f2 values after pre-rotation: %f, %f, %f, %f\n", 
-           temp_f2[0], temp_f2[1], temp_f2[2], temp_f2[3]);
-    free(temp_f2);
-
-    // FFT
-    printf("\nCUDA: Before FFT\n");
+    
+    // ifft
     cuda_fft_state *state = cuda_fft_alloc(N4, shift);
     if (!state) {
         fprintf(stderr, "Failed to allocate FFT state\n");
@@ -345,29 +287,10 @@ void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N
                                      CUFFT_INVERSE);
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
     cudaDeviceSynchronize(); // Ensure all operations are complete
-
-
-    // Debug: Check FFT output
-    var_t *temp_fft = (var_t *)malloc(N4 * sizeof(cufftComplex));
-    if (temp_fft == NULL) {
-        fprintf(stderr, "Failed to allocate memory for temp_fft\n");
-        exit(EXIT_FAILURE);
-    }
-    
-    printf("\nCUDA: Before cudaMemcpy\n");
-    CHECK_CUDA_ERROR(cudaMemcpy(temp_fft, state->d_out, N4 * sizeof(cufftComplex), cudaMemcpyDeviceToHost));
-
-    printf("\nCUDA: After cudaMemcpy\n");
-    printf("First 4 values after FFT: %f, %f, %f, %f\n", 
-           temp_fft[0], temp_fft[1], temp_fft[2], temp_fft[3]);
-    fflush(stdout); // Ensure output is flushed
-    free(temp_fft);
-
     CHECK_CUDA_ERROR(cudaMemcpy(output_offset, state->d_out, 
                                N4 * sizeof(cufftComplex), cudaMemcpyDeviceToDevice));
 
-    // Post-rotation and mirror
-    printf("\nCUDA: Before post-rotation and mirror\n");
+    // post-rotation
     int numElementsRotation = (N4 + 1) >> 1;
     int numBlocksRotation = (numElementsRotation + blockSize - 1) / blockSize;
     postRotationKernel<<<numBlocksRotation, blockSize>>>(dev_output, dev_t, 
@@ -375,24 +298,15 @@ void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
     
-    // Debug: Check post-rotation output
-    var_t *temp_post = (var_t *)malloc(size_output);
-    CHECK_CUDA_ERROR(cudaMemcpy(temp_post, dev_output, size_output, cudaMemcpyDeviceToHost));
-    printf("First 4 output values after post-rotation: %f, %f, %f, %f\n", 
-           temp_post[overlap>>1], temp_post[(overlap>>1)+1], temp_post[(overlap>>1)+2], temp_post[(overlap>>1)+ 3]);
-    free(temp_post);
-
+    // mirror
     int numElementsMirror = overlap / 2;
     int numBlocksMirror = (numElementsMirror + blockSize - 1) / blockSize;
     mirrorKernel<<<numBlocksMirror, blockSize>>>(dev_output, dev_window, overlap);
-
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
 
     // Copy final results and print
     CHECK_CUDA_ERROR(cudaMemcpy(output, dev_output, size_output, cudaMemcpyDeviceToHost));
-    printf("First 4 final output values: %f, %f, %f, %f\n", 
-           output[0], output[1], output[2], output[3]);
 
     // Cleanup
     if (state) cuda_fft_free(state);
@@ -401,8 +315,6 @@ void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N
     cudaFree(dev_t);
     cudaFree(dev_window);
     cudaFree(dev_f2);
-
-    printf("=== CUDA Processing End ===\n\n");
 } 
 
 
