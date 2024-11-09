@@ -278,17 +278,12 @@ void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N
     }
 
     var_t *output_offset = dev_output + (overlap >> 1);
-    CHECK_CUDA_ERROR(cudaMemcpy(state->d_in, dev_f2, N4 * sizeof(cufftComplex), 
-                               cudaMemcpyDeviceToDevice));
-    
-    cufftResult result = cufftExecC2C(state->plan, 
-                                     (cufftComplex *)state->d_in,
-                                     (cufftComplex *)state->d_out,
-                                     CUFFT_INVERSE);
+    cufftResult result = cufftExecC2C(state->plan,
+                                      (cufftComplex *)dev_f2,
+                                      (cufftComplex *)output_offset,
+                                      CUFFT_INVERSE);
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
     cudaDeviceSynchronize(); // Ensure all operations are complete
-    CHECK_CUDA_ERROR(cudaMemcpy(output_offset, state->d_out, 
-                               N4 * sizeof(cufftComplex), cudaMemcpyDeviceToDevice));
 
     // post-rotation
     int numElementsRotation = (N4 + 1) >> 1;
@@ -382,32 +377,22 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
 
     // ch 0
     var_t *output_offset = dev_output + (overlap >> 1);
-    CHECK_CUDA_ERROR(cudaMemcpy(state->d_in, dev_f0, N4 * sizeof(cufftComplex),
-                                cudaMemcpyDeviceToDevice));
-
     cufftResult result = cufftExecC2C(state->plan,
-                                      (cufftComplex *)state->d_in,
-                                      (cufftComplex *)state->d_out,
+                                      (cufftComplex *)dev_f0,
+                                      (cufftComplex *)output_offset,
                                       CUFFT_INVERSE);
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
     cudaDeviceSynchronize(); // Ensure all operations are complete
-    CHECK_CUDA_ERROR(cudaMemcpy(output_offset, state->d_out,
-                                N4 * sizeof(cufftComplex), cudaMemcpyDeviceToDevice));
 
     // ch 1
     output_offset = dev_output1 + (overlap >> 1);
-    CHECK_CUDA_ERROR(cudaMemcpy(state->d_in, dev_f1, N4 * sizeof(cufftComplex),
-                                cudaMemcpyDeviceToDevice));
-
     cufftResult result1 = cufftExecC2C(state->plan,
-                                      (cufftComplex *)state->d_in,
-                                      (cufftComplex *)state->d_out,
-                                      CUFFT_INVERSE);
+                                       (cufftComplex *)dev_f1,
+                                       (cufftComplex *)output_offset,
+                                       CUFFT_INVERSE);
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
     cudaDeviceSynchronize(); // Ensure all operations are complete
-    CHECK_CUDA_ERROR(cudaMemcpy(output_offset, state->d_out,
-                                N4 * sizeof(cufftComplex), cudaMemcpyDeviceToDevice));
-
+    
     // post-rotation
     int numElementsRotation = (N4 + 1) >> 1;
     int numBlocksRotation = (numElementsRotation + blockSize - 1) / blockSize;

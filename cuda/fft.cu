@@ -23,23 +23,6 @@ cuda_fft_state* cuda_fft_alloc(int nfft, int shift) {
         return NULL;
     }
     
-    // Allocate device memory
-    cudaError_t error;
-    error = cudaMalloc((void**)&state->d_in, nfft * sizeof(cufftComplex));
-    if (error != cudaSuccess) {
-        cufftDestroy(state->plan);
-        free(state);
-        return NULL;
-    }
-    
-    error = cudaMalloc((void**)&state->d_out, nfft * sizeof(cufftComplex));
-    if (error != cudaSuccess) {
-        cudaFree(state->d_in);
-        cufftDestroy(state->plan);
-        free(state);
-        return NULL;
-    }
-    
     state->initialized = 1;
     return state;
 }
