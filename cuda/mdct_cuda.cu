@@ -368,31 +368,33 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     cudaDeviceSynchronize();
 
     // ifft
-    cuda_fft_state *state = cuda_fft_alloc(N4, shift);
-    if (!state)
+    cufftHandle plan;
+    cufftResult result = cufftPlan1d(&plan, N4, CUFFT_C2C, 1);
+    if (result != CUFFT_SUCCESS)
     {
-        fprintf(stderr, "Failed to allocate FFT state\n");
         exit(EXIT_FAILURE);
     }
 
     // ch 0
     var_t *output_offset = dev_output + (overlap >> 1);
-    cufftResult result = cufftExecC2C(state->plan,
-                                      (cufftComplex *)dev_f0,
-                                      (cufftComplex *)output_offset,
-                                      CUFFT_INVERSE);
+    result = cufftExecC2C(plan,
+                          (cufftComplex *)dev_f0,
+                          (cufftComplex *)output_offset,
+                          CUFFT_INVERSE);
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
     cudaDeviceSynchronize(); // Ensure all operations are complete
 
     // ch 1
     output_offset = dev_output1 + (overlap >> 1);
-    cufftResult result1 = cufftExecC2C(state->plan,
-                                       (cufftComplex *)dev_f1,
-                                       (cufftComplex *)output_offset,
-                                       CUFFT_INVERSE);
+    result = cufftExecC2C(plan,
+                          (cufftComplex *)dev_f1,
+                          (cufftComplex *)output_offset,
+                          CUFFT_INVERSE);
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
     cudaDeviceSynchronize(); // Ensure all operations are complete
-    
+
+    cufftDestroy(plan);
+
     // post-rotation
     int numElementsRotation = (N4 + 1) >> 1;
     int numBlocksRotation = (numElementsRotation + blockSize - 1) / blockSize;
@@ -424,8 +426,6 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     CHECK_CUDA_ERROR(cudaMemcpy(output[1], dev_output1, size_output, cudaMemcpyDeviceToHost));
 
     // Cleanup
-    if (state)
-        cuda_fft_free(state);
     cudaFree(dev_buf_ptr);
 }
 
