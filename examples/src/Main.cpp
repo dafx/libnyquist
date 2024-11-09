@@ -98,6 +98,10 @@ int main(int argc, const char **argv) try
         // 8 channel opus
         //loader.Load(fileData.get(), "test_data/Rachel8ch.opus");
 
+        #ifdef USE_CUDA
+        cleanupCudaBuffers();
+        #endif
+
         // 1 + 2 channel wavpack
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Float32.wv");
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Float32_Mono.wv");
