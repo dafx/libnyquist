@@ -336,24 +336,25 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     size_t size_trig = (N4 << shift) * sizeof(var_t);
     size_t size_window = overlap * sizeof(var_t);
 
-    // size_t total_dev_size = size_input + size_output + size_trig + size_window + size_fft;
-    // var_t *dev_buf_ptr;
+    // Allocate and copy memory
+    size_t total_dev_size = size_input * 2 + size_output * 2 + size_trig + size_window + size_fft * 2;
+    var_t *dev_buf_ptr;
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_buf_ptr, total_dev_size));
+    dev_input = dev_buf_ptr;
+    dev_output = (float*)((char *)dev_input + size_input);
+    dev_input1 = (float*)((char *)dev_output + size_output);
+    dev_output1 = (float*)((char *)dev_input1 + size_input);
+    dev_t = (float*)((char *)dev_output1 + size_output);
+    dev_window = (float*)((char *)dev_t + size_trig);
+    dev_f0 = (float*)((char *)dev_window + size_window);
+    dev_f1 = (float*)((char *)dev_f0 + size_fft);
+
     // if(dev_buf.find(total_dev_size) == dev_buf.end()) {
     //     CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_buf_ptr, total_dev_size));
     //     dev_buf[total_dev_size] = dev_buf_ptr;
     // } else {
     //     dev_buf_ptr = dev_buf[total_dev_size];
     // }
-
-    // Allocate and copy memory
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_input, size_input));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_output, size_output));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_input1, size_input));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_output1, size_output));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_t, size_trig));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_window, size_window));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_f0, size_fft));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_f1, size_fft));
 
     // make sure to copy output to device !!!
     CHECK_CUDA_ERROR(cudaMemcpy(dev_output, output[0], size_output, cudaMemcpyHostToDevice));
@@ -440,14 +441,7 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     // Cleanup
     if (state)
         cuda_fft_free(state);
-    cudaFree(dev_input);
-    cudaFree(dev_input1);
-    cudaFree(dev_output);
-    cudaFree(dev_output1);
-    cudaFree(dev_t);
-    cudaFree(dev_window);
-    cudaFree(dev_f0);
-    cudaFree(dev_f1);
+    cudaFree(dev_buf_ptr);
 }
 
 void cleanupCudaBuffers() {

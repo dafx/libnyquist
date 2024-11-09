@@ -209,7 +209,8 @@ endif()
 
 
 if(USE_CUDA)
-  add_test(NAME libnyquist_cuda_test
-        COMMAND $<TARGET_FILE:libnyquist_cuda_test>
-  )
+    add_test(NAME libnyquist_cuda_test
+            COMMAND $<TARGET_FILE:libnyquist-examples>
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            )
 endif()
