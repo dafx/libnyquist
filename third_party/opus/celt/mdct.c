@@ -216,11 +216,26 @@ void clt_mdct_forward(const mdct_lookup *l, kiss_fft_scalar *in,
   RESTORE_STACK;
 }
 
+#ifdef USE_CUDA
+
 #include "../../../cuda/mdct_cuda.hpp"
 
-
-
-#ifdef USE_CUDA
+void clt_mdct_backward_B1_C2(const mdct_lookup *l, kiss_fft_scalar *in[2],
+                             kiss_fft_scalar *OPUS_RESTRICT out[2],
+                             const opus_val16 *OPUS_RESTRICT window, int overlap,
+                             int shift, int stride)
+{
+  #if 0
+  clt_mdct_backward(l, in[0], out[0], window, overlap, shift, stride);
+  clt_mdct_backward(l, in[1], out[1], window, overlap, shift, stride);
+  #else
+  int N = l->n;
+  N >>= shift;
+  // just consider the float version
+  kiss_twiddle_scalar sine = (kiss_twiddle_scalar)2 * PI * (.125f) / N;
+  processMDCTCudaB1C2(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
+  #endif
+}
 
 void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
                        kiss_fft_scalar *OPUS_RESTRICT out,
@@ -234,6 +249,16 @@ void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
 }
 
 #else
+
+void clt_mdct_backward_B1_C2(const mdct_lookup *l, kiss_fft_scalar *in[2],
+                             kiss_fft_scalar *OPUS_RESTRICT out[2],
+                             const opus_val16 *OPUS_RESTRICT window, int overlap,
+                             int shift, int stride)
+{
+  clt_mdct_backward(l, in[0], out[0], window, overlap, shift, stride);
+  clt_mdct_backward(l, in[1], out[1], window, overlap, shift, stride);
+}
+
 void clt_mdct_backward(const mdct_lookup *l, kiss_fft_scalar *in,
                        kiss_fft_scalar *OPUS_RESTRICT out,
                        const opus_val16 *OPUS_RESTRICT window, int overlap,

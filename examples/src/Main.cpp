@@ -15,7 +15,9 @@
 
 using namespace nqr;
 
+#ifdef USE_CUDA
 #include "../cuda/mdct_cuda.hpp"
+#endif
 
 extern "C" int test_opus_ifft(int nfft, float *fin, float *fout);
 
@@ -90,8 +92,11 @@ int main(int argc, const char **argv) try
         //auto memory = ReadFile("test_data/ad_hoc/KittyPurr24_Stereo.flac"); // broken
         //loader.Load(fileData.get(), "flac", memory.buffer); // broken
 
-        // Single-channel opus
-        loader.Load(fileData.get(), "test_data/sb-reverie.opus"); // "Firefox: From All, To All"
+        // 2-channel opus
+        loader.Load(fileData.get(), "test_data/sb-reverie.opus");
+
+        // 8 channel opus
+        //loader.Load(fileData.get(), "test_data/Rachel8ch.opus");
 
         // 1 + 2 channel wavpack
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Float32.wv");
@@ -167,10 +172,10 @@ int main(int argc, const char **argv) try
         printf("len: %ld sum: %f\n", fileData->samples.size(), sum);
         if (static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602) {
             printf("wrong results!\n");
+            printf("decoding done, save to wave file\n");
+            a.save("opusdec.wav", AudioFileFormat::Wave);
             return EXIT_FAILURE;
         }
-        printf("decoding done, save to wave file\n");
-        a.save("opusdec.wav", AudioFileFormat::Wave);
     }
 
     return EXIT_SUCCESS;

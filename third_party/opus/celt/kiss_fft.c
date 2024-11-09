@@ -748,6 +748,7 @@ void opus_ifft(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *
 
 int test_opus_ifft(int nfft, float *fin, float *fout)
 {
+    #ifndef USE_CUDA
     int i;
 
     kiss_fft_cpx *cfin = (kiss_fft_cpx *)malloc(nfft * sizeof(kiss_fft_cpx));  // NOLINT
@@ -765,5 +766,6 @@ int test_opus_ifft(int nfft, float *fin, float *fout)
         fout[2 * i] = cfout[i].r;
         fout[2 * i + 1] = cfout[i].i;
     }
+    #endif
     return 0;
 }
