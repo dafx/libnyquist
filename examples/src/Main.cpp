@@ -93,7 +93,7 @@ int main(int argc, const char **argv) try
         //loader.Load(fileData.get(), "flac", memory.buffer); // broken
 
         // 2-channel opus
-        loader.Load(fileData.get(), "test_data/sb-reverie.opus");
+        loader.Load(fileData.get(), "test_data/short.opus");
 
         // 8 channel opus
         //loader.Load(fileData.get(), "test_data/Rachel8ch.opus");
@@ -174,7 +174,8 @@ int main(int argc, const char **argv) try
             }
         }
         printf("len: %ld sum: %f\n", fileData->samples.size(), sum);
-        if (static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602) {
+        if (static_cast<int>(sum) != 22 || fileData->samples.size() != 421930)
+        {
             printf("wrong results!\n");
             printf("decoding done, save to wave file\n");
             a.save("opusdec.wav", AudioFileFormat::Wave);
