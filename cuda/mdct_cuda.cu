@@ -306,25 +306,14 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
     cudaDeviceSynchronize(); // Ensure all operations are complete
 
-    // post-rotation
-    int numElementsRotation = (N4 + 1) >> 1;
-    int numBlocksRotation = (numElementsRotation + blockSize - 1) / blockSize;
-    postRotationKernel<<<numBlocksRotation, blockSize>>>(dev_output, dev_t,
-                                                         N2, N4, shift, sine, overlap);
+    // post-rotation and mirror
+    int max_elements = max((N4 + 1) >> 1, overlap / 2);
+    int numBlocksFused = (max_elements + blockSize - 1) / blockSize;
+    postAndMirrorKernel<<<numBlocksFused, blockSize>>>(dev_output, dev_t, dev_window,
+                                                       N2, N4, shift, sine, overlap);
     CHECK_LAST_CUDA_ERROR();
-
-    postRotationKernel<<<numBlocksRotation, blockSize>>>(dev_output1, dev_t,
-                                                         N2, N4, shift, sine, overlap);
-    CHECK_LAST_CUDA_ERROR();
-    cudaDeviceSynchronize();
-
-    // mirror
-    int numElementsMirror = overlap / 2;
-    int numBlocksMirror = (numElementsMirror + blockSize - 1) / blockSize;
-    mirrorKernel<<<numBlocksMirror, blockSize>>>(dev_output, dev_window, overlap);
-    CHECK_LAST_CUDA_ERROR();
-
-    mirrorKernel<<<numBlocksMirror, blockSize>>>(dev_output1, dev_window, overlap);
+    postAndMirrorKernel<<<numBlocksFused, blockSize>>>(dev_output1, dev_t, dev_window,
+                                                       N2, N4, shift, sine, overlap);
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
 

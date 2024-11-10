@@ -200,16 +200,7 @@ enable_testing()
 
 # Add test for libnyquist-examples
 if (LIBNYQUIST_BUILD_EXAMPLE)
-    get_filename_component(RESOLVED_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/../" ABSOLUTE)
     add_test(NAME libnyquist_example_test
-            COMMAND $<TARGET_FILE:libnyquist-examples>
-            WORKING_DIRECTORY ${RESOLVED_BINARY_DIR}
-            )
-endif()
-
-
-if(USE_CUDA)
-    add_test(NAME libnyquist_cuda_test
             COMMAND $<TARGET_FILE:libnyquist-examples>
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             )
