@@ -332,7 +332,7 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     size_t size_window = overlap * sizeof(var_t);
 
     // Allocate and copy memory
-    size_t total_dev_size = size_input * 2 + size_output * 2 + size_trig + size_window + size_fft * 2;
+    size_t total_dev_size = size_input * 2 + size_output * 2 + size_trig + size_window + size_fft * 4;
     var_t *dev_buf_ptr;
     CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_buf_ptr, total_dev_size));
     dev_input = dev_buf_ptr;
@@ -343,6 +343,7 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     dev_window = (float*)((char *)dev_t + size_trig);
     dev_f0 = (float*)((char *)dev_window + size_window);
     dev_f1 = (float*)((char *)dev_f0 + size_fft);
+    var_t *dev_fft_output = (float*)((char *)dev_f1 + size_fft);
 
     // if(dev_buf.find(total_dev_size) == dev_buf.end()) {
     //     CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_buf_ptr, total_dev_size));
@@ -368,30 +369,28 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
 
     // ifft
     cufftHandle plan;
-    cufftResult result = cufftPlan1d(&plan, N4, CUFFT_C2C, 1);
+    cufftResult result = cufftPlan1d(&plan, N4, CUFFT_C2C, 2);
     if (result != CUFFT_SUCCESS)
     {
         exit(EXIT_FAILURE);
     }
 
-    // ch 0
-    var_t *output_offset = dev_output + (overlap >> 1);
+    // batch of 2
     result = cufftExecC2C(plan,
                           (cufftComplex *)dev_f0,
-                          (cufftComplex *)output_offset,
-                          CUFFT_INVERSE);
-    CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
-
-    // ch 1
-    output_offset = dev_output1 + (overlap >> 1);
-    result = cufftExecC2C(plan,
-                          (cufftComplex *)dev_f1,
-                          (cufftComplex *)output_offset,
+                          (cufftComplex *)dev_fft_output,
                           CUFFT_INVERSE);
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
     cudaDeviceSynchronize(); // Ensure all operations are complete
-
     cufftDestroy(plan);
+
+    // ch 1
+    var_t *c0_output_offset = dev_output + (overlap >> 1);
+    var_t *c1_output_offset = dev_output1 + (overlap >> 1);
+    CHECK_CUDA_ERROR(cudaMemcpy(c0_output_offset, dev_fft_output, size_fft, cudaMemcpyDeviceToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(c1_output_offset, (char *)dev_fft_output + size_fft, size_fft, cudaMemcpyDeviceToDevice));
+    CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
+    cudaDeviceSynchronize(); // Ensure all operations are complete
 
     // post-rotation
     int numElementsRotation = (N4 + 1) >> 1;
