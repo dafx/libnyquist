@@ -1,5 +1,4 @@
 #pragma once
-#include <cufft.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -8,6 +7,9 @@ extern "C" {
 #ifndef var_t
 #define var_t float
 #endif
+
+#ifdef __CUDACC__
+#include <cufft.h>
 
 // Add the FFT-related type definition
 typedef struct {
@@ -23,6 +25,7 @@ typedef struct {
 cuda_fft_state* cuda_fft_alloc(int nfft, int shift);
 int cuda_fft_execute(cuda_fft_state *state, const float *input, float *output);
 void cuda_fft_free(cuda_fft_state *state);
+#endif
 
 void doPreRotation(const float *input, float *output, int N);
 void preRotateWithCuda(const var_t *host_xp1, var_t *host_yp,
@@ -35,7 +38,6 @@ void postAndMirrorWithCuda(var_t *out, const var_t *host_t, int N2, int N4, int 
 void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window);
 void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window);
 
-void processMDCTSeparate(const var_t *input, var_t *output, const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window);
 
 void cleanupCudaBuffers();
 
