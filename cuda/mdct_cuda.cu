@@ -363,7 +363,6 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     int blockSize = 256;
     int numBlocks = (N4 + blockSize - 1) / blockSize;
     doPreRotation<<<numBlocks, blockSize>>>(dev_input, dev_f0, dev_t, N4, shift, stride, N2, sine);
-    cudaDeviceSynchronize();
     doPreRotation<<<numBlocks, blockSize>>>(dev_input1, dev_f1, dev_t, N4, shift, stride, N2, sine);
     cudaDeviceSynchronize();
 
@@ -382,7 +381,6 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
                           (cufftComplex *)output_offset,
                           CUFFT_INVERSE);
     CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
-    cudaDeviceSynchronize(); // Ensure all operations are complete
 
     // ch 1
     output_offset = dev_output1 + (overlap >> 1);
@@ -401,7 +399,6 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     postRotationKernel<<<numBlocksRotation, blockSize>>>(dev_output, dev_t,
                                                          N2, N4, shift, sine, overlap);
     CHECK_LAST_CUDA_ERROR();
-    cudaDeviceSynchronize();
 
     postRotationKernel<<<numBlocksRotation, blockSize>>>(dev_output1, dev_t,
                                                          N2, N4, shift, sine, overlap);
@@ -413,16 +410,13 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     int numBlocksMirror = (numElementsMirror + blockSize - 1) / blockSize;
     mirrorKernel<<<numBlocksMirror, blockSize>>>(dev_output, dev_window, overlap);
     CHECK_LAST_CUDA_ERROR();
-    cudaDeviceSynchronize();
-
-    // Copy final results and print
-    CHECK_CUDA_ERROR(cudaMemcpy(output[0], dev_output, size_output, cudaMemcpyDeviceToHost));
-
 
     mirrorKernel<<<numBlocksMirror, blockSize>>>(dev_output1, dev_window, overlap);
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
 
+    // Copy final results and print
+    CHECK_CUDA_ERROR(cudaMemcpy(output[0], dev_output, size_output, cudaMemcpyDeviceToHost));
     CHECK_CUDA_ERROR(cudaMemcpy(output[1], dev_output1, size_output, cudaMemcpyDeviceToHost));
 
     // Cleanup
