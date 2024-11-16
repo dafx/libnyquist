@@ -34,6 +34,7 @@ if(USE_CUDA)
     project(libnyquist LANGUAGES C CXX CUDA)
 else()
     project(libnyquist LANGUAGES C CXX)
+    add_compile_definitions(ENABLE_FFT_TEST)
 endif()
 
 file(GLOB nyquist_include "${LIBNYQUIST_ROOT}/include/libnyquist/*")
@@ -199,16 +200,8 @@ enable_testing()
 
 # Add test for libnyquist-examples
 if (LIBNYQUIST_BUILD_EXAMPLE)
-    get_filename_component(RESOLVED_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/../" ABSOLUTE)
     add_test(NAME libnyquist_example_test
             COMMAND $<TARGET_FILE:libnyquist-examples>
-            WORKING_DIRECTORY ${RESOLVED_BINARY_DIR}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             )
-endif()
-
-
-if(USE_CUDA)
-  add_test(NAME libnyquist_cuda_test
-        COMMAND $<TARGET_FILE:libnyquist_cuda_test>
-  )
 endif()

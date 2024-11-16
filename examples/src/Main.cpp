@@ -15,13 +15,29 @@
 
 using namespace nqr;
 
+#ifdef USE_CUDA
 #include "../cuda/mdct_cuda.hpp"
+#endif
+
+extern "C" int test_opus_ifft(int nfft, float *fin, float *fout);
 
 int main(int argc, const char **argv) try
 {
     #ifdef USE_CUDA
     printCudaVersion();
     #endif
+
+    {
+        {
+            std::vector<float> input = {1, 2, 3, 4, 5, 6, 7, 8};
+            std::vector<float> output(8);
+            int ret = test_opus_ifft(4, input.data(), output.data());
+            if (ret != 0) {
+                printf("test_opus_ifft failed with return code %d\n", ret);
+                return EXIT_FAILURE;
+            }
+        }
+    }
 
     const int desiredSampleRate = 44100;
     const int desiredChannelCount = 2;
@@ -76,8 +92,16 @@ int main(int argc, const char **argv) try
         //auto memory = ReadFile("test_data/ad_hoc/KittyPurr24_Stereo.flac"); // broken
         //loader.Load(fileData.get(), "flac", memory.buffer); // broken
 
-        // Single-channel opus
-        loader.Load(fileData.get(), "../../test_data/sb-reverie.opus"); // "Firefox: From All, To All"
+        // 2-channel opus
+        //loader.Load(fileData.get(), "test_data/short.opus");
+        loader.Load(fileData.get(), "test_data/sb-reverie.opus");
+
+        // 8 channel opus
+        //loader.Load(fileData.get(), "test_data/Rachel8ch.opus");
+
+        #ifdef USE_CUDA
+        cleanupCudaBuffers();
+        #endif
 
         // 1 + 2 channel wavpack
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Float32.wv");
@@ -151,12 +175,13 @@ int main(int argc, const char **argv) try
             }
         }
         printf("len: %ld sum: %f\n", fileData->samples.size(), sum);
-        if (static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602) {
+        if (static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602)
+        {
             printf("wrong results!\n");
+            printf("decoding done, save to wave file\n");
+            a.save("opusdec.wav", AudioFileFormat::Wave);
             return EXIT_FAILURE;
         }
-        printf("decoding done, save to wave file\n");
-        a.save("opusdec.wav", AudioFileFormat::Wave);
     }
 
     return EXIT_SUCCESS;

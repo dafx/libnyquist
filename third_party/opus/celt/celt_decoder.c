@@ -278,11 +278,23 @@ void compute_inv_mdcts(const CELTMode *mode, int shortBlocks, celt_sig *X,
       N = mode->shortMdctSize<<LM;
       shift = mode->maxLM-LM;
    }
-   c=0; do {
-      /* IMDCT on the interleaved the sub-frames, overlap-add is performed by the IMDCT */
-      for (b=0;b<B;b++)
-         clt_mdct_backward(&mode->mdct, &X[b+c*N*B], out_mem[c]+N*b, mode->window, overlap, shift, B);
-   } while (++c<C);
+
+   if (B == 1 && C == 2)
+   {
+      float *in[2] = { (float*)X, (float*)(X+N) };
+      float *out[2] = { (float*)out_mem[0], (float*)out_mem[1] };
+      clt_mdct_backward_B1_C2(&mode->mdct, in, out, mode->window, overlap, shift, 1);
+   }
+   else 
+   {
+      c = 0;
+      do
+      {
+         /* IMDCT on the interleaved the sub-frames, overlap-add is performed by the IMDCT */
+         for (b = 0; b < B; b++)
+            clt_mdct_backward(&mode->mdct, &X[b + c * N * B], out_mem[c] + N * b, mode->window, overlap, shift, B);
+      } while (++c < C);
+   }
 }
 
 static void tf_decode(int start, int end, int isTransient, int *tf_res, int LM, ec_dec *dec)

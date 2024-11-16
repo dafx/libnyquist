@@ -36,7 +36,10 @@ void postAndMirrorWithCuda(var_t *out, const var_t *host_t, int N2, int N4, int 
 
 // New function declaration
 void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window);
+void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *trig, int N, int shift, int stride, var_t sine, int overlap, const var_t *window);
 
+
+void cleanupCudaBuffers();
 
 #ifdef __cplusplus
 }
