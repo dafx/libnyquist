@@ -233,7 +233,12 @@ void clt_mdct_backward_B1_C2(const mdct_lookup *l, kiss_fft_scalar *in[2],
   N >>= shift;
   // just consider the float version
   kiss_twiddle_scalar sine = (kiss_twiddle_scalar)2 * PI * (.125f) / N;
+
+  struct timeval start, end;
+  gettimeofday(&start, NULL);
   processMDCTCudaB1C2(in, out, &l->trig[0], N, shift, stride, sine, overlap, window);
+  gettimeofday(&end, NULL);
+  fprintf(stderr, "time cost: %ld us\n", (end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec);
   #endif
 }
 
