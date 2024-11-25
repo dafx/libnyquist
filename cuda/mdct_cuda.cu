@@ -146,6 +146,37 @@ __global__ void postAndMirrorKernel(var_t *d_out,
     }
 }
 
+__global__ void doPreRotationFused(const var_t *xp1_ch0, const var_t *xp1_ch1,
+                                  var_t *yp_ch0, var_t *yp_ch1,
+                                  const var_t *t, int N4, int shift,
+                                  int stride, int N2, var_t sine) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < N4) {
+        // Process channel 0
+        const var_t *xp1_i_ch0 = xp1_ch0 + i * 2 * stride;
+        const var_t *xp2_i_ch0 = xp1_ch0 + stride * (N2 - 1) - i * 2 * stride;
+
+        var_t yr_ch0, yi_ch0;
+        yr_ch0 = -S_MUL(*xp2_i_ch0, t[i << shift]) + S_MUL(*xp1_i_ch0, t[(N4 - i) << shift]);
+        yi_ch0 = -S_MUL(*xp2_i_ch0, t[(N4 - i) << shift]) - S_MUL(*xp1_i_ch0, t[i << shift]);
+
+        yp_ch0[i * 2] = yr_ch0 - S_MUL(yi_ch0, sine);
+        yp_ch0[i * 2 + 1] = yi_ch0 + S_MUL(yr_ch0, sine);
+
+        // Process channel 1
+        const var_t *xp1_i_ch1 = xp1_ch1 + i * 2 * stride;
+        const var_t *xp2_i_ch1 = xp1_ch1 + stride * (N2 - 1) - i * 2 * stride;
+
+        var_t yr_ch1, yi_ch1;
+        yr_ch1 = -S_MUL(*xp2_i_ch1, t[i << shift]) + S_MUL(*xp1_i_ch1, t[(N4 - i) << shift]);
+        yi_ch1 = -S_MUL(*xp2_i_ch1, t[(N4 - i) << shift]) - S_MUL(*xp1_i_ch1, t[i << shift]);
+
+        yp_ch1[i * 2] = yr_ch1 - S_MUL(yi_ch1, sine);
+        yp_ch1[i * 2 + 1] = yi_ch1 + S_MUL(yr_ch1, sine);
+    }
+}
+
 void processMDCTCuda(const var_t *input, var_t *output, const var_t *trig, int N, 
                      int shift, int stride, var_t sine, int overlap, const var_t *window) {
     int N2 = N >> 1;
@@ -277,8 +308,7 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     // Pre-rotation
     int blockSize = 256;
     int numBlocks = (N4 + blockSize - 1) / blockSize;
-    doPreRotation<<<numBlocks, blockSize>>>(dev_input, dev_f0, dev_t, N4, shift, stride, N2, sine);
-    doPreRotation<<<numBlocks, blockSize>>>(dev_input1, dev_f1, dev_t, N4, shift, stride, N2, sine);
+    doPreRotationFused<<<numBlocks, blockSize>>>(dev_input, dev_input1, dev_f0, dev_f1, dev_t, N4, shift, stride, N2, sine);
     cudaDeviceSynchronize();
 
     // ifft
