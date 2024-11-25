@@ -274,6 +274,14 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     CHECK_CUDA_ERROR(cudaMemcpy(dev_t, trig, size_trig, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(dev_window, window, size_window, cudaMemcpyHostToDevice));
 
+    // Create CUDA events for GPU kernel timing
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    
+    // Start GPU kernel timing
+    cudaEventRecord(start);
+
     // Pre-rotation
     int blockSize = 256;
     int numBlocks = (N4 + blockSize - 1) / blockSize;
@@ -294,8 +302,7 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
                           (cufftComplex *)dev_f0,
                           (cufftComplex *)dev_fft_output,
                           CUFFT_INVERSE);
-    CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
-    cudaDeviceSynchronize(); // Ensure all operations are complete
+    cudaDeviceSynchronize();
     cufftDestroy(plan);
 
     // ch 1
@@ -316,12 +323,23 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
                                                        N2, N4, shift, sine, overlap);
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
+    
+    // Stop GPU kernel timing
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float kernel_time = 0;
+    cudaEventElapsedTime(&kernel_time, start, stop);
 
     // Copy final results and print
     CHECK_CUDA_ERROR(cudaMemcpy(output[0], dev_output, size_output, cudaMemcpyDeviceToHost));
     CHECK_CUDA_ERROR(cudaMemcpy(output[1], dev_output1, size_output, cudaMemcpyDeviceToHost));
 
+    printf("MDCT Performance:\n");
+    printf("  Pure Kernel Time: %.3f ms\n", kernel_time);
+    
     // Cleanup
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
     cudaFree(dev_buf_ptr);
 }
 
