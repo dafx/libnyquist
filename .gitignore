@@ -48,3 +48,6 @@ encoded.wav
 .vscode
 out
 .cache
+benchmark/
+opusdec.wav
+sb-reverie-60ms-frames.opus
