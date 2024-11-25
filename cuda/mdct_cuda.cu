@@ -23,6 +23,9 @@
     } \
 } while(0)
 
+static float total_kernel_time = 0.0f;
+static int call_count = 0;
+
 // CUDA kernel
 __global__ void doPreRotation(const var_t *xp1, var_t *yp, const var_t *t,
                               int N4, int shift, int stride, int N2,
@@ -330,13 +333,20 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     float kernel_time = 0;
     cudaEventElapsedTime(&kernel_time, start, stop);
 
+    // Update statistics
+    total_kernel_time += kernel_time;
+    call_count++;
+    
+    float avg_time = total_kernel_time / call_count;
+
+    printf("MDCT Performance (#%d):\n", call_count);
+    printf("  Current Kernel Time: %.3f ms\n", kernel_time);
+    printf("  Average Kernel Time: %.3f ms\n", avg_time);
+    
     // Copy final results and print
     CHECK_CUDA_ERROR(cudaMemcpy(output[0], dev_output, size_output, cudaMemcpyDeviceToHost));
     CHECK_CUDA_ERROR(cudaMemcpy(output[1], dev_output1, size_output, cudaMemcpyDeviceToHost));
 
-    printf("MDCT Performance:\n");
-    printf("  Pure Kernel Time: %.3f ms\n", kernel_time);
-    
     // Cleanup
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
