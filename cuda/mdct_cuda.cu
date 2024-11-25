@@ -146,6 +146,139 @@ __global__ void postAndMirrorKernel(var_t *d_out,
     }
 }
 
+__global__ void postAndMirrorKernelFused(var_t *d_out_ch0, 
+                                        var_t *d_out_ch1,
+                                        const var_t *t, 
+                                        const var_t *window,
+                                        int N2, int N4, 
+                                        int shift,
+                                        var_t sine, 
+                                        int overlap) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    // Handle post-rotation part for both channels
+    if (idx < (N4 + 1) >> 1) {
+        // Channel 0 processing
+        {
+            var_t re, im, yr, yi;
+            var_t t0, t1;
+            
+            // Calculate left pointer position for channel 0
+            var_t *yp0 = d_out_ch0 + (overlap >> 1) + 2 * idx;
+            // Calculate right pointer position for channel 0
+            var_t *yp1 = d_out_ch0 + (overlap >> 1) + N2 - 2 - 2 * idx;
+            
+            // Process the first pair of values
+            re = yp0[0];
+            im = yp0[1];
+            t0 = t[idx << shift];
+            t1 = t[(N4 - idx) << shift];
+            yr = S_MUL(re, t0) - S_MUL(im, t1);
+            yi = S_MUL(im, t0) + S_MUL(re, t1);
+            
+            // Save the first pair of results
+            var_t yr1 = yr;
+            var_t yi1 = yi;
+            
+            // Process the second pair of values
+            re = yp1[0];
+            im = yp1[1];
+            t0 = t[(N4 - idx - 1) << shift];
+            t1 = t[(idx + 1) << shift];
+            yr = S_MUL(re, t0) - S_MUL(im, t1);
+            yi = S_MUL(im, t0) + S_MUL(re, t1);
+            
+            // Write results in the same order as the CPU version
+            yp0[0] = -(yr1 - S_MUL(yi1, sine));  // Left real
+            yp1[1] = yi1 + S_MUL(yr1, sine);     // Right imag
+            yp1[0] = -(yr - S_MUL(yi, sine));    // Right real
+            yp0[1] = yi + S_MUL(yr, sine);       // Left imag
+        }
+
+        // Channel 1 processing
+        {
+            var_t re, im, yr, yi;
+            var_t t0, t1;
+            
+            // Calculate left pointer position for channel 1
+            var_t *yp0 = d_out_ch1 + (overlap >> 1) + 2 * idx;
+            // Calculate right pointer position for channel 1
+            var_t *yp1 = d_out_ch1 + (overlap >> 1) + N2 - 2 - 2 * idx;
+            
+            // Process the first pair of values
+            re = yp0[0];
+            im = yp0[1];
+            t0 = t[idx << shift];
+            t1 = t[(N4 - idx) << shift];
+            yr = S_MUL(re, t0) - S_MUL(im, t1);
+            yi = S_MUL(im, t0) + S_MUL(re, t1);
+            
+            // Save the first pair of results
+            var_t yr1 = yr;
+            var_t yi1 = yi;
+            
+            // Process the second pair of values
+            re = yp1[0];
+            im = yp1[1];
+            t0 = t[(N4 - idx - 1) << shift];
+            t1 = t[(idx + 1) << shift];
+            yr = S_MUL(re, t0) - S_MUL(im, t1);
+            yi = S_MUL(im, t0) + S_MUL(re, t1);
+            
+            // Write results in the same order as the CPU version
+            yp0[0] = -(yr1 - S_MUL(yi1, sine));  // Left real
+            yp1[1] = yi1 + S_MUL(yr1, sine);     // Right imag
+            yp1[0] = -(yr - S_MUL(yi, sine));    // Right real
+            yp0[1] = yi + S_MUL(yr, sine);       // Left imag
+        }
+    }
+
+    //sync threads before mirror operation
+    __syncthreads();
+
+    // Handle mirror part for both channels
+    int mirror_idx = idx;
+    if (mirror_idx < overlap / 2) {
+        // Channel 0 mirror
+        {
+            var_t x1, x2;
+            var_t *xp1 = d_out_ch0 + overlap - 1 - mirror_idx;
+            var_t *yp1 = d_out_ch0 + mirror_idx;
+            const var_t *wp1 = window + mirror_idx;
+            const var_t *wp2 = window + overlap - 1 - mirror_idx;
+            
+            x1 = *xp1;
+            x2 = *yp1;
+            
+            // Use temporary variables to avoid writing order issues
+            var_t temp1 = S_MUL(*wp2, x2) - S_MUL(*wp1, x1);
+            var_t temp2 = S_MUL(*wp1, x2) + S_MUL(*wp2, x1);
+            
+            *yp1 = temp1;
+            *xp1 = temp2;
+        }
+
+        // Channel 1 mirror
+        {
+            var_t x1, x2;
+            var_t *xp1 = d_out_ch1 + overlap - 1 - mirror_idx;
+            var_t *yp1 = d_out_ch1 + mirror_idx;
+            const var_t *wp1 = window + mirror_idx;
+            const var_t *wp2 = window + overlap - 1 - mirror_idx;
+            
+            x1 = *xp1;
+            x2 = *yp1;
+            
+            // Use temporary variables to avoid writing order issues
+            var_t temp1 = S_MUL(*wp2, x2) - S_MUL(*wp1, x1);
+            var_t temp2 = S_MUL(*wp1, x2) + S_MUL(*wp2, x1);
+            
+            *yp1 = temp1;
+            *xp1 = temp2;
+        }
+    }
+}
+
 __global__ void doPreRotationFused(const var_t *xp1_ch0, const var_t *xp1_ch1,
                                   var_t *yp_ch0, var_t *yp_ch1,
                                   const var_t *t, int N4, int shift,
@@ -339,11 +472,8 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     // post-rotation and mirror
     int max_elements = max((N4 + 1) >> 1, overlap / 2);
     int numBlocksFused = (max_elements + blockSize - 1) / blockSize;
-    postAndMirrorKernel<<<numBlocksFused, blockSize>>>(dev_output, dev_t, dev_window,
-                                                       N2, N4, shift, sine, overlap);
-    CHECK_LAST_CUDA_ERROR();
-    postAndMirrorKernel<<<numBlocksFused, blockSize>>>(dev_output1, dev_t, dev_window,
-                                                       N2, N4, shift, sine, overlap);
+    postAndMirrorKernelFused<<<numBlocksFused, blockSize>>>(dev_output, dev_output1, dev_t, dev_window,
+                                                           N2, N4, shift, sine, overlap);
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
 
