@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include <iostream>
+#include <float.h>
 
 #ifndef S_MUL
 #define S_MUL(a, b) ((a) * (b))
@@ -22,9 +23,6 @@
         exit(EXIT_FAILURE); \
     } \
 } while(0)
-
-// static float total_kernel_time = 0.0f;
-// static int call_count = 0;
 
 // CUDA kernel
 __global__ void doPreRotation(const var_t *xp1, var_t *yp, const var_t *t,
@@ -397,123 +395,145 @@ void printCudaVersion() {
 static std::unordered_map<int, var_t *> dev_buf;
 static std::unordered_map<int, cuda_fft_state *> fft_buf;
 
-void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *trig, int N,
-                         int shift, int stride, var_t sine, int overlap, const var_t *window)
-{
-    int N2 = N >> 1;
-    int N4 = N >> 2;
-
-    // Device pointers and memory allocation
-    var_t *dev_input, *dev_output, *dev_t, *dev_window, *dev_f0, *dev_f1;
-    var_t *dev_input1, *dev_output1;
-    size_t size_input = N4 * 2 * stride * sizeof(var_t);
-    size_t size_output = (N2 + overlap) * sizeof(var_t);
-    size_t size_fft = N4 * 2 * sizeof(var_t);
-    size_t size_trig = (N4 << shift) * sizeof(var_t);
-    size_t size_window = overlap * sizeof(var_t);
-
-    // Allocate and copy memory
-    size_t total_dev_size = size_input * 2 + size_output * 2 + size_trig + size_window + size_fft * 4;
-    var_t *dev_buf_ptr;
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_buf_ptr, total_dev_size));
-    dev_input = dev_buf_ptr;
-    dev_output = (float*)((char *)dev_input + size_input);
-    dev_input1 = (float*)((char *)dev_output + size_output);
-    dev_output1 = (float*)((char *)dev_input1 + size_input);
-    dev_t = (float*)((char *)dev_output1 + size_output);
-    dev_window = (float*)((char *)dev_t + size_trig);
-    dev_f0 = (float*)((char *)dev_window + size_window);
-    dev_f1 = (float*)((char *)dev_f0 + size_fft);
-    var_t *dev_fft_output = (float*)((char *)dev_f1 + size_fft);
-
-    // if(dev_buf.find(total_dev_size) == dev_buf.end()) {
-    //     CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_buf_ptr, total_dev_size));
-    //     dev_buf[total_dev_size] = dev_buf_ptr;
-    // } else {
-    //     dev_buf_ptr = dev_buf[total_dev_size];
-    // }
-
-    // make sure to copy output to device !!!
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_output, output[0], size_output, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_input, input[0], size_input, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_output1, output[1], size_output, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_input1, input[1], size_input, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_t, trig, size_trig, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_window, window, size_window, cudaMemcpyHostToDevice));
-
-    // Create CUDA events for GPU kernel timing
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
+// Create MDCT CUDA state
+mdct_cuda_state* mdct_cuda_create(int N, int shift, int stride, int overlap) {
+    mdct_cuda_state* state = (mdct_cuda_state*)malloc(sizeof(mdct_cuda_state));
+    if (!state) return nullptr;
     
-    // // Start GPU kernel timing
-    // cudaEventRecord(start);
+    // Initialize configuration
+    state->N = N;
+    state->N2 = N >> 1;
+    state->N4 = N >> 2;
+    state->shift = shift;
+    state->stride = stride;
+    state->overlap = overlap;
+    state->initialized = false;
+    
+    // Calculate buffer sizes
+    state->size_input = state->N4 * 2 * stride * sizeof(var_t);
+    state->size_output = (state->N2 + overlap) * sizeof(var_t);
+    state->size_fft = state->N4 * 2 * sizeof(var_t);
+    state->size_trig = (state->N4 << shift) * sizeof(var_t);
+    state->size_window = overlap * sizeof(var_t);
+    
+    // Allocate device memory
+    size_t total_size = state->size_input * 2 + state->size_output * 2 + 
+                       state->size_trig + state->size_window + state->size_fft * 4;
+    
+    var_t* dev_buf;
+    if (cudaMalloc(&dev_buf, total_size) != cudaSuccess) {
+        free(state);
+        return nullptr;
+    }
+    
+    // Assign buffer pointers
+    state->dev_input = dev_buf;
+    state->dev_output = (var_t*)((char*)state->dev_input + state->size_input);
+    state->dev_input1 = (var_t*)((char*)state->dev_output + state->size_output);
+    state->dev_output1 = (var_t*)((char*)state->dev_input1 + state->size_input);
+    state->dev_t = (var_t*)((char*)state->dev_output1 + state->size_output);
+    state->dev_window = (var_t*)((char*)state->dev_t + state->size_trig);
+    state->dev_f0 = (var_t*)((char*)state->dev_window + state->size_window);
+    state->dev_f1 = (var_t*)((char*)state->dev_f0 + state->size_fft);
+    state->dev_fft_output = (var_t*)((char*)state->dev_f1 + state->size_fft);
+    
+    // Create FFT plan
+    if (cufftPlan1d(&state->plan, state->N4, CUFFT_C2C, 2) != CUFFT_SUCCESS) {
+        cudaFree(dev_buf);
+        free(state);
+        return nullptr;
+    }
+    
+    state->initialized = true;
+    return state;
+}
+
+// Destroy MDCT CUDA state
+void mdct_cuda_destroy(mdct_cuda_state* state) {
+    if (state) {
+        if (state->initialized) {
+            cudaFree(state->dev_input);  // Free all device memory (allocated as one block)
+            cufftDestroy(state->plan);
+        }
+        free(state);
+    }
+}
+
+// Process MDCT using persistent state
+void mdct_cuda_process(mdct_cuda_state* state, const var_t *input[2], var_t *output[2],
+                      const var_t *trig, const var_t *window, var_t sine) {
+    if (!state || !state->initialized) return;
+
+    // Copy input data to device
+    cudaMemcpy(state->dev_input, input[0], state->size_input, cudaMemcpyHostToDevice);
+    cudaMemcpy(state->dev_input1, input[1], state->size_input, cudaMemcpyHostToDevice);
+    cudaMemcpy(state->dev_output, output[0], state->size_output, cudaMemcpyHostToDevice);
+    cudaMemcpy(state->dev_output1, output[1], state->size_output, cudaMemcpyHostToDevice);
+    cudaMemcpy(state->dev_t, trig, state->size_trig, cudaMemcpyHostToDevice);
+    cudaMemcpy(state->dev_window, window, state->size_window, cudaMemcpyHostToDevice);
 
     // Pre-rotation
     int blockSize = 256;
-    int numBlocks = (N4 + blockSize - 1) / blockSize;
-    doPreRotationFused<<<numBlocks, blockSize>>>(dev_input, dev_input1, dev_f0, dev_f1, dev_t, N4, shift, stride, N2, sine);
-    cudaDeviceSynchronize();
+    int numBlocks = (state->N4 + blockSize - 1) / blockSize;
 
-    // ifft
-    cufftHandle plan;
-    cufftResult result = cufftPlan1d(&plan, N4, CUFFT_C2C, 2);
-    if (result != CUFFT_SUCCESS)
-    {
-        exit(EXIT_FAILURE);
-    }
+    doPreRotationFused<<<numBlocks, blockSize>>>(
+        state->dev_input, state->dev_input1,
+        state->dev_f0, state->dev_f1,
+        state->dev_t, state->N4, state->shift,
+        state->stride, state->N2, sine
+    );
 
-    // batch of 2
-    result = cufftExecC2C(plan,
-                          (cufftComplex *)dev_f0,
-                          (cufftComplex *)dev_fft_output,
-                          CUFFT_INVERSE);
-    cudaDeviceSynchronize();
-    cufftDestroy(plan);
+    // Execute FFT
+    cufftExecC2C(state->plan,
+                 (cufftComplex *)state->dev_f0,
+                 (cufftComplex *)state->dev_fft_output,
+                 CUFFT_INVERSE);
 
-    // ch 1
-    var_t *c0_output_offset = dev_output + (overlap >> 1);
-    var_t *c1_output_offset = dev_output1 + (overlap >> 1);
-    CHECK_CUDA_ERROR(cudaMemcpy(c0_output_offset, dev_fft_output, size_fft, cudaMemcpyDeviceToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(c1_output_offset, (char *)dev_fft_output + size_fft, size_fft, cudaMemcpyDeviceToDevice));
-    CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
-    cudaDeviceSynchronize(); // Ensure all operations are complete
+    // Copy FFT results
+    var_t *c0_output_offset = state->dev_output + (state->overlap >> 1);
+    var_t *c1_output_offset = state->dev_output1 + (state->overlap >> 1);
+    cudaMemcpy(c0_output_offset, state->dev_fft_output, state->size_fft, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(c1_output_offset, (char*)state->dev_fft_output + state->size_fft, state->size_fft, cudaMemcpyDeviceToDevice);
 
-    // post-rotation and mirror
-    int max_elements = max((N4 + 1) >> 1, overlap / 2);
+    // Post-rotation and mirror
+    int max_elements = max((state->N4 + 1) >> 1, state->overlap / 2);
     int numBlocksFused = (max_elements + blockSize - 1) / blockSize;
-    postAndMirrorKernelFused<<<numBlocksFused, blockSize>>>(dev_output, dev_output1, dev_t, dev_window,
-                                                           N2, N4, shift, sine, overlap);
-    CHECK_LAST_CUDA_ERROR();
-    cudaDeviceSynchronize();
-    
-    // Stop GPU kernel timing
-    // cudaEventRecord(stop);
-    // cudaEventSynchronize(stop);
-    // float kernel_time = 0;
-    // cudaEventElapsedTime(&kernel_time, start, stop);
+    postAndMirrorKernelFused<<<numBlocksFused, blockSize>>>(
+        state->dev_output, state->dev_output1,
+        state->dev_t, state->dev_window,
+        state->N2, state->N4, state->shift,
+        sine, state->overlap
+    );
 
-    // Update statistics
-    // total_kernel_time += kernel_time;
-    // call_count++;
-    
-    // float avg_time = total_kernel_time / call_count;
-
-    // printf("MDCT Performance (#%d):\n", call_count);
-    // printf("  Current Kernel Time: %.3f ms\n", kernel_time);
-    // printf("  Average Kernel Time: %.3f ms\n", avg_time);
-    
-    // Copy final results and print
-    CHECK_CUDA_ERROR(cudaMemcpy(output[0], dev_output, size_output, cudaMemcpyDeviceToHost));
-    CHECK_CUDA_ERROR(cudaMemcpy(output[1], dev_output1, size_output, cudaMemcpyDeviceToHost));
-
-    // Cleanup
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);
-    cudaFree(dev_buf_ptr);
+    // Copy results back to host
+    cudaMemcpy(output[0], state->dev_output, state->size_output, cudaMemcpyDeviceToHost);
+    cudaMemcpy(output[1], state->dev_output1, state->size_output, cudaMemcpyDeviceToHost);
 }
 
+// Update the original function to use the new state management
+void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2],
+                         const var_t *trig, int N, int shift,
+                         int stride, var_t sine, int overlap,
+                         const var_t *window) {
+    static mdct_cuda_state* state = nullptr;
+    
+    // Create state if not exists
+    if (!state) {
+        state = mdct_cuda_create(N, shift, stride, overlap);
+        if (!state) {
+            printf("Failed to create MDCT CUDA state\n");
+            return;
+        }
+    }
+    
+    // Process using persistent state
+    mdct_cuda_process(state, input, output, trig, window, sine);
+}
+
+// Update cleanup function
 void cleanupCudaBuffers() {
+    // Add cleanup for static state if needed
+    // Note: This function might need to be called explicitly at program end
     for (auto &it : dev_buf) {
         cudaFree(it.second);
     }
@@ -522,4 +542,152 @@ void cleanupCudaBuffers() {
         cuda_fft_free(it.second);
     }
     fft_buf.clear();
+}
+
+// Performance test function
+void performanceTest(int numIterations) {
+    // Test parameters
+    const int N = 2048;  // FFT size
+    const int shift = 1;
+    const int stride = 1;
+    const float sine = 0.0f;
+    const int overlap = 256;
+    
+    // Allocate host memory
+    const int N2 = N >> 1;
+    const int N4 = N >> 2;
+    const var_t *input_const[2];
+    var_t *input[2], *output[2], *trig, *window;
+    
+    input[0] = new var_t[N4 * 2 * stride];
+    input[1] = new var_t[N4 * 2 * stride];
+    output[0] = new var_t[N2 + overlap];
+    output[1] = new var_t[N2 + overlap];
+    trig = new var_t[N4 << shift];
+    window = new var_t[overlap];
+    
+    input_const[0] = input[0];
+    input_const[1] = input[1];
+    
+    // Initialize test data
+    for(int i = 0; i < N4 * 2 * stride; i++) {
+        input[0][i] = (var_t)rand() / RAND_MAX;
+        input[1][i] = (var_t)rand() / RAND_MAX;
+    }
+    for(int i = 0; i < N4 << shift; i++) {
+        trig[i] = (var_t)rand() / RAND_MAX;
+    }
+    for(int i = 0; i < overlap; i++) {
+        window[i] = (var_t)rand() / RAND_MAX;
+    }
+    
+    // Create CUDA events for timing
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    
+    // Warmup run
+    processMDCTCudaB1C2(input_const, output, trig, N, shift, stride, sine, overlap, window);
+    cudaDeviceSynchronize();
+    
+    // Performance test
+    float totalTime = 0.0f;
+    float minTime = FLT_MAX;
+    float maxTime = 0.0f;
+    
+    printf("\nRunning performance test with %d iterations...\n", numIterations);
+    
+    for(int i = 0; i < numIterations; i++) {
+        cudaEventRecord(start);
+        
+        processMDCTCudaB1C2(input_const, output, trig, N, shift, stride, sine, overlap, window);
+        
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        
+        float milliseconds = 0;
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        
+        totalTime += milliseconds;
+        minTime = min(minTime, milliseconds);
+        maxTime = max(maxTime, milliseconds);
+        
+        if((i + 1) % 10 == 0) {
+            printf("Completed %d iterations...\n", i + 1);
+        }
+    }
+    
+    // Print performance statistics
+    float avgTime = totalTime / numIterations;
+    printf("\nPerformance Statistics (over %d iterations):\n", numIterations);
+    printf("Average Time: %.4f ms\n", avgTime);
+    printf("Min Time:     %.4f ms\n", minTime);
+    printf("Max Time:     %.4f ms\n", maxTime);
+    printf("Total Time:   %.4f ms\n", totalTime);
+    
+    // Cleanup
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    
+    delete[] input[0];
+    delete[] input[1];
+    delete[] output[0];
+    delete[] output[1];
+    delete[] trig;
+    delete[] window;
+}
+
+// FFT helper functions implementation
+cuda_fft_state* cuda_fft_alloc(int nfft, int shift) {
+    cuda_fft_state* state = (cuda_fft_state*)malloc(sizeof(cuda_fft_state));
+    if (!state) return nullptr;
+    
+    state->nfft = nfft;
+    state->shift = shift;
+    state->initialized = 0;
+    
+    // Create FFT plan
+    if (cufftPlan1d(&state->plan, nfft, CUFFT_C2C, 2) != CUFFT_SUCCESS) {
+        free(state);
+        return nullptr;
+    }
+    
+    // Allocate device memory
+    if (cudaMalloc(&state->d_in, nfft * sizeof(cufftComplex)) != cudaSuccess ||
+        cudaMalloc(&state->d_out, nfft * sizeof(cufftComplex)) != cudaSuccess) {
+        cufftDestroy(state->plan);
+        free(state);
+        return nullptr;
+    }
+    
+    state->initialized = 1;
+    return state;
+}
+
+int cuda_fft_execute(cuda_fft_state *state, const float *input, float *output) {
+    if (!state || !state->initialized) return -1;
+    
+    // Copy input to device
+    cudaMemcpy(state->d_in, input, state->nfft * sizeof(cufftComplex), cudaMemcpyHostToDevice);
+    
+    // Execute FFT
+    if (cufftExecC2C(state->plan, (cufftComplex*)state->d_in, (cufftComplex*)state->d_out, CUFFT_FORWARD) != CUFFT_SUCCESS) {
+        return -1;
+    }
+    
+    // Copy result back to host
+    cudaMemcpy(output, state->d_out, state->nfft * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+    
+    return 0;
+}
+
+void cuda_fft_free(cuda_fft_state *state) {
+    if (state) {
+        if (state->initialized) {
+            cudaFree(state->d_in);
+            cudaFree(state->d_out);
+            cufftDestroy(state->plan);
+        }
+        free(state);
+    }
 }

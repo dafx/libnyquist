@@ -51,3 +51,4 @@ out
 benchmark/
 opusdec.wav
 sb-reverie-60ms-frames.opus
+cuda/mdct_test

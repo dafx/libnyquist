@@ -25,6 +25,49 @@ typedef struct {
 cuda_fft_state* cuda_fft_alloc(int nfft, int shift);
 int cuda_fft_execute(cuda_fft_state *state, const float *input, float *output);
 void cuda_fft_free(cuda_fft_state *state);
+
+// MDCT state management structure
+typedef struct {
+    // FFT plan
+    cufftHandle plan;
+    
+    // Device buffers
+    var_t *dev_input;      // Input buffer for channel 1
+    var_t *dev_input1;     // Input buffer for channel 2
+    var_t *dev_output;     // Output buffer for channel 1
+    var_t *dev_output1;    // Output buffer for channel 2
+    var_t *dev_t;          // Trig table
+    var_t *dev_window;     // Window function
+    var_t *dev_f0;         // FFT buffer for channel 1
+    var_t *dev_f1;         // FFT buffer for channel 2
+    var_t *dev_fft_output; // FFT output buffer
+    
+    // Configuration
+    int N;                 // FFT size
+    int N2;               // N/2
+    int N4;               // N/4
+    int shift;            // Shift parameter
+    int stride;           // Stride parameter
+    int overlap;          // Overlap size
+    var_t sine;           // Sine parameter
+    
+    // Buffer sizes
+    size_t size_input;
+    size_t size_output;
+    size_t size_trig;
+    size_t size_window;
+    size_t size_fft;
+    
+    // State
+    bool initialized;
+} mdct_cuda_state;
+
+// MDCT state management functions
+mdct_cuda_state* mdct_cuda_create(int N, int shift, int stride, int overlap);
+void mdct_cuda_destroy(mdct_cuda_state* state);
+void mdct_cuda_process(mdct_cuda_state* state, const var_t *input[2], var_t *output[2], 
+                      const var_t *trig, const var_t *window, var_t sine);
+
 #endif
 
 void doPreRotation(const float *input, float *output, int N);
@@ -40,6 +83,9 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
 
 
 void cleanupCudaBuffers();
+
+// Performance test function declaration
+void performanceTest(int numIterations = 100);
 
 #ifdef __cplusplus
 }
