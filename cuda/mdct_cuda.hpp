@@ -30,6 +30,7 @@ void cuda_fft_free(cuda_fft_state *state);
 typedef struct {
   // FFT plan
   cufftHandle plan;
+  cuda_fft_state *fft_state;  // Persistent FFT state
 
   // Device buffers
   var_t *dev_input;      // Input buffer for channel 1

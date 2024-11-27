@@ -458,6 +458,15 @@ mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
     return nullptr;
   }
 
+  // Create FFT state
+  state->fft_state = cuda_fft_alloc(state->N4, state->shift);
+  if (!state->fft_state) {
+    cufftDestroy(state->plan);
+    cudaFree(dev_buf);
+    free(state);
+    return nullptr;
+  }
+
   state->initialized = true;
   return state;
 }
@@ -469,6 +478,9 @@ void mdct_cuda_destroy(mdct_cuda_state *state) {
       cudaFree(
           state->dev_input); // Free all device memory (allocated as one block)
       cufftDestroy(state->plan);
+      if (state->fft_state) {
+        cuda_fft_free(state->fft_state);
+      }
     }
     free(state);
   }
@@ -502,23 +514,17 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
       state->dev_input, state->dev_input1, state->dev_f0, state->dev_f1,
       state->dev_t, state->N4, state->shift, state->stride, state->N2, sine);
 
-  // Execute FFT
-  cuda_fft_state *state_fft = cuda_fft_alloc(state->N4, state->shift);
-  if (!state_fft) {
-    fprintf(stderr, "Failed to allocate FFT state\n");
-    exit(EXIT_FAILURE);
-  }
-
   var_t *c0_output_offset = state->dev_output + (state->overlap >> 1);
   var_t *c1_output_offset = state->dev_output1 + (state->overlap >> 1);
+
+  // Execute FFT using the persistent FFT state
   int result = cuda_fft_execute(
-      state_fft, (const float *)state->dev_f0, (const float *)state->dev_f1,
+      state->fft_state, (const float *)state->dev_f0, (const float *)state->dev_f1,
       (float *)c0_output_offset, (float *)c1_output_offset);
 
   if (result != 0) {
     fprintf(stderr, "FFT execution failed with error %d\n", result);
-    cuda_fft_free(state_fft);
-    exit(EXIT_FAILURE);
+    return;
   }
 
   // Post-rotation and mirror
