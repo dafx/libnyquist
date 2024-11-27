@@ -16,7 +16,7 @@ build_and_profile() {
     ncu --metrics gpu__time_duration.avg,sm__throughput.avg,dram__throughput.avg,\
 l1tex__t_bytes.avg,sm__warps_active.avg,\
 sm__pipe_alu_cycles_active.avg,sm__pipe_fma_cycles_active.avg \
-        --kernel-regex "doPreRotation|regular_fft|postAndMirrorKernel|doPreRotationFused|postAndMirrorKernelFused" \
+        --kernel-name "doPreRotation","regular_fft","postAndMirrorKernel","doPreRotationFused","postAndMirrorKernelFused" \
         --csv \
         --target-processes all \
         -c 10 \
