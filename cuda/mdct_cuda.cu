@@ -493,6 +493,31 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
   if (!state || !state->initialized)
     return;
 
+  // Create CUDA events for timing
+  cudaEvent_t start, stop;
+  cudaEvent_t memAlloc_start, h2d_start, preproc_start, fft_start;
+  cudaEvent_t fft_plan_start, fft_exec_start, fft_cleanup_start;
+  cudaEvent_t postproc_start, d2h_start, cleanup_start;
+  
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventCreate(&memAlloc_start);
+  cudaEventCreate(&h2d_start);
+  cudaEventCreate(&preproc_start);
+  cudaEventCreate(&fft_start);
+  cudaEventCreate(&fft_plan_start);
+  cudaEventCreate(&fft_exec_start);
+  cudaEventCreate(&fft_cleanup_start);
+  cudaEventCreate(&postproc_start);
+  cudaEventCreate(&d2h_start);
+  cudaEventCreate(&cleanup_start);
+
+  cudaEventRecord(start);
+  cudaEventRecord(memAlloc_start);
+
+  // Memory allocation timing would go here if any dynamic allocation was needed
+  
+  cudaEventRecord(h2d_start);
   // Copy input data to device
   cudaMemcpy(state->dev_input, input[0], state->size_input,
              cudaMemcpyHostToDevice);
@@ -506,6 +531,7 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
   cudaMemcpy(state->dev_window, window, state->size_window,
              cudaMemcpyHostToDevice);
 
+  cudaEventRecord(preproc_start);
   // Pre-rotation
   int blockSize = 256;
   int numBlocks = (state->N4 + blockSize - 1) / blockSize;
@@ -517,7 +543,10 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
   var_t *c0_output_offset = state->dev_output + (state->overlap >> 1);
   var_t *c1_output_offset = state->dev_output1 + (state->overlap >> 1);
 
+  cudaEventRecord(fft_start);
+  cudaEventRecord(fft_plan_start);
   // Execute FFT using the persistent FFT state
+  cudaEventRecord(fft_exec_start);
   int result = cuda_fft_execute(
       state->fft_state, (const float *)state->dev_f0, (const float *)state->dev_f1,
       (float *)c0_output_offset, (float *)c1_output_offset);
@@ -526,6 +555,9 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
     fprintf(stderr, "FFT execution failed with error %d\n", result);
     return;
   }
+  
+  cudaEventRecord(fft_cleanup_start);
+  cudaEventRecord(postproc_start);
 
   // Post-rotation and mirror
   int max_elements = max((state->N4 + 1) >> 1, state->overlap / 2);
@@ -534,11 +566,67 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
       state->dev_output, state->dev_output1, state->dev_t, state->dev_window,
       state->N2, state->N4, state->shift, sine, state->overlap);
 
+  cudaEventRecord(d2h_start);
   // Copy results back to host
   cudaMemcpy(output[0], state->dev_output, state->size_output,
              cudaMemcpyDeviceToHost);
   cudaMemcpy(output[1], state->dev_output1, state->size_output,
              cudaMemcpyDeviceToHost);
+
+  cudaEventRecord(cleanup_start);
+  cudaEventRecord(stop);
+  cudaEventSynchronize(stop);
+
+  // Calculate timing
+  float total_time, memAlloc_time, h2d_time, preproc_time, fft_total_time;
+  float fft_plan_time, fft_exec_time, fft_cleanup_time, postproc_time;
+  float d2h_time, cleanup_time, other_time;
+
+  cudaEventElapsedTime(&total_time, start, stop);
+  cudaEventElapsedTime(&memAlloc_time, memAlloc_start, h2d_start);
+  cudaEventElapsedTime(&h2d_time, h2d_start, preproc_start);
+  cudaEventElapsedTime(&preproc_time, preproc_start, fft_start);
+  cudaEventElapsedTime(&fft_total_time, fft_start, postproc_start);
+  cudaEventElapsedTime(&fft_plan_time, fft_plan_start, fft_exec_start);
+  cudaEventElapsedTime(&fft_exec_time, fft_exec_start, fft_cleanup_start);
+  cudaEventElapsedTime(&fft_cleanup_time, fft_cleanup_start, postproc_start);
+  cudaEventElapsedTime(&postproc_time, postproc_start, d2h_start);
+  cudaEventElapsedTime(&d2h_time, d2h_start, cleanup_start);
+  cudaEventElapsedTime(&cleanup_time, cleanup_start, stop);
+
+  float fft_overhead = fft_total_time - (fft_plan_time + fft_exec_time + fft_cleanup_time);
+  other_time = total_time - (memAlloc_time + h2d_time + preproc_time + fft_total_time + 
+                            postproc_time + d2h_time + cleanup_time);
+
+  // Print timing statistics
+  printf("\nMDCT CUDA Timing Statistics:\n");
+  printf("Total Time:                  %.3f ms (100.0%%)\n", total_time);
+  printf("Memory Allocation:           %.3f ms (%5.1f%%)\n", memAlloc_time, 100.0f * memAlloc_time / total_time);
+  printf("Host to Device Transfer:     %.3f ms (%5.1f%%)\n", h2d_time, 100.0f * h2d_time / total_time);
+  printf("Pre-processing:              %.3f ms (%5.1f%%)\n", preproc_time, 100.0f * preproc_time / total_time);
+  printf("IFFT Total:                  %.3f ms (%5.1f%%)\n", fft_total_time, 100.0f * fft_total_time / total_time);
+  printf("  IFFT Plan:                 %.3f ms (%5.1f%%)\n", fft_plan_time, 100.0f * fft_plan_time / total_time);
+  printf("  IFFT Execute:              %.3f ms (%5.1f%%)\n", fft_exec_time, 100.0f * fft_exec_time / total_time);
+  printf("  IFFT Cleanup:              %.3f ms (%5.1f%%)\n", fft_cleanup_time, 100.0f * fft_cleanup_time / total_time);
+  printf("  IFFT Overhead:             %.3f ms (%5.1f%%)\n", fft_overhead, 100.0f * fft_overhead / total_time);
+  printf("Post-processing:             %.3f ms (%5.1f%%)\n", postproc_time, 100.0f * postproc_time / total_time);
+  printf("Device to Host Transfer:     %.3f ms (%5.1f%%)\n", d2h_time, 100.0f * d2h_time / total_time);
+  printf("Cleanup:                     %.3f ms (%5.1f%%)\n", cleanup_time, 100.0f * cleanup_time / total_time);
+  printf("Other/Overhead:              %.3f ms (%5.1f%%)\n", other_time, 100.0f * other_time / total_time);
+
+  // Cleanup events
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
+  cudaEventDestroy(memAlloc_start);
+  cudaEventDestroy(h2d_start);
+  cudaEventDestroy(preproc_start);
+  cudaEventDestroy(fft_start);
+  cudaEventDestroy(fft_plan_start);
+  cudaEventDestroy(fft_exec_start);
+  cudaEventDestroy(fft_cleanup_start);
+  cudaEventDestroy(postproc_start);
+  cudaEventDestroy(d2h_start);
+  cudaEventDestroy(cleanup_start);
 }
 
 // Update the original function to use the new state management
