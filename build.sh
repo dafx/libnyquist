@@ -18,7 +18,7 @@ build_and_profile() {
         ncu --metrics gpu__time_duration.avg,sm__throughput.avg,dram__throughput.avg,\
 l1tex__t_bytes.avg,sm__warps_active.avg,\
 sm__pipe_alu_cycles_active.avg,sm__pipe_fma_cycles_active.avg \
-        -k  regex:"doPreRotationFused|postAndMirrorKernelFused" \
+        -k  regex:"doPreRotationFused|postAndMirrorKernelFused|.*fft" \
         --csv \
         -c 10 \
         ./out/build/gcc-cuda/bin/libnyquist-examples test_data/sb-reverie.opus > "$output_file" 2>&1
@@ -27,7 +27,7 @@ sm__pipe_alu_cycles_active.avg,sm__pipe_fma_cycles_active.avg \
         ncu --metrics gpu__time_duration.avg,sm__throughput.avg,dram__throughput.avg,\
 l1tex__t_bytes.avg,sm__warps_active.avg,\
 sm__pipe_alu_cycles_active.avg,sm__pipe_fma_cycles_active.avg \
-        -k  regex:"doPreRotation|postAndMirrorKernel" \
+        -k  regex:"doPreRotation|postAndMirrorKernel|.*fft" \
         --csv \
         -c 10 \
         ./out/build/gcc-cuda/bin/libnyquist-examples test_data/sb-reverie.opus > "$output_file" 2>&1
