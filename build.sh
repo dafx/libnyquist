@@ -13,14 +13,25 @@ build_and_profile() {
     
     echo "Running NCU profiling..."
     # Profile all three kernels with metrics
-    ncu --metrics gpu__time_duration.avg,sm__throughput.avg,dram__throughput.avg,\
+    if [ "$branch" == "6-fuse-2c-pre-and-2c-postmirror" ]; then
+        # Fused kernels
+        ncu --metrics gpu__time_duration.avg,sm__throughput.avg,dram__throughput.avg,\
 l1tex__t_bytes.avg,sm__warps_active.avg,\
 sm__pipe_alu_cycles_active.avg,sm__pipe_fma_cycles_active.avg \
-        --kernel-name "*" \
+        -k  regex:"doPreRotationFused|postAndMirrorKernelFused" \
         --csv \
-        --target-processes all \
         -c 10 \
         ./out/build/gcc-cuda/bin/libnyquist-examples test_data/sb-reverie.opus > "$output_file" 2>&1
+    else
+        # Unfused kernels
+        ncu --metrics gpu__time_duration.avg,sm__throughput.avg,dram__throughput.avg,\
+l1tex__t_bytes.avg,sm__warps_active.avg,\
+sm__pipe_alu_cycles_active.avg,sm__pipe_fma_cycles_active.avg \
+        -k  regex:"doPreRotation|postAndMirrorKernel" \
+        --csv \
+        -c 10 \
+        ./out/build/gcc-cuda/bin/libnyquist-examples test_data/sb-reverie.opus > "$output_file" 2>&1
+    fi
 }
 
 # Create directory for reports if it doesn't exist
