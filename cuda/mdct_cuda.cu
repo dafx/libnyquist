@@ -397,11 +397,31 @@ void printCudaVersion() {
 static std::unordered_map<int, var_t *> dev_buf;
 static std::unordered_map<int, cuda_fft_state *> fft_buf;
 
-void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *trig, int N,
+void processMDCTCudaB1C2(const var_t **input, var_t **output, const var_t *trig, int N,
                          int shift, int stride, var_t sine, int overlap, const var_t *window)
 {
     int N2 = N >> 1;
     int N4 = N >> 2;
+
+    // Create CUDA events for timing
+    cudaEvent_t start, stop;
+    cudaEvent_t event1, event2, event3, event4, event5, event6, event7;
+    float total_time = 0.0f, time_temp = 0.0f;
+    float mem_alloc_time = 0.0f, h2d_time = 0.0f, preproc_time = 0.0f;
+    float ifft_plan_time = 0.0f, ifft_exec_time = 0.0f, ifft_cleanup_time = 0.0f;
+    float postproc_time = 0.0f, d2h_time = 0.0f, cleanup_time = 0.0f;
+
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventCreate(&event1);
+    cudaEventCreate(&event2);
+    cudaEventCreate(&event3);
+    cudaEventCreate(&event4);
+    cudaEventCreate(&event5);
+    cudaEventCreate(&event6);
+    cudaEventCreate(&event7);
+
+    cudaEventRecord(start);
 
     // Device pointers and memory allocation
     var_t *dev_input, *dev_output, *dev_t, *dev_window, *dev_f0, *dev_f1;
@@ -412,7 +432,7 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     size_t size_trig = (N4 << shift) * sizeof(var_t);
     size_t size_window = overlap * sizeof(var_t);
 
-    // Allocate and copy memory
+    // Allocate memory
     size_t total_dev_size = size_input * 2 + size_output * 2 + size_trig + size_window + size_fft * 4;
     var_t *dev_buf_ptr;
     CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_buf_ptr, total_dev_size));
@@ -426,14 +446,9 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     dev_f1 = (float*)((char *)dev_f0 + size_fft);
     var_t *dev_fft_output = (float*)((char *)dev_f1 + size_fft);
 
-    // if(dev_buf.find(total_dev_size) == dev_buf.end()) {
-    //     CHECK_CUDA_ERROR(cudaMalloc((void **)&dev_buf_ptr, total_dev_size));
-    //     dev_buf[total_dev_size] = dev_buf_ptr;
-    // } else {
-    //     dev_buf_ptr = dev_buf[total_dev_size];
-    // }
+    cudaEventRecord(event1);
 
-    // make sure to copy output to device !!!
+    // Host to Device transfers
     CHECK_CUDA_ERROR(cudaMemcpy(dev_output, output[0], size_output, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(dev_input, input[0], size_input, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(dev_output1, output[1], size_output, cudaMemcpyHostToDevice));
@@ -441,13 +456,7 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     CHECK_CUDA_ERROR(cudaMemcpy(dev_t, trig, size_trig, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(dev_window, window, size_window, cudaMemcpyHostToDevice));
 
-    // Create CUDA events for GPU kernel timing
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-    
-    // // Start GPU kernel timing
-    // cudaEventRecord(start);
+    cudaEventRecord(event2);
 
     // Pre-rotation
     int blockSize = 256;
@@ -455,7 +464,9 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
     doPreRotationFused<<<numBlocks, blockSize>>>(dev_input, dev_input1, dev_f0, dev_f1, dev_t, N4, shift, stride, N2, sine);
     cudaDeviceSynchronize();
 
-    // ifft
+    cudaEventRecord(event3);
+
+    // IFFT Plan
     cufftHandle plan;
     cufftResult result = cufftPlan1d(&plan, N4, CUFFT_C2C, 2);
     if (result != CUFFT_SUCCESS)
@@ -463,53 +474,88 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2], const var_t *t
         exit(EXIT_FAILURE);
     }
 
-    // batch of 2
+    cudaEventRecord(event4);
+
+    // IFFT Execute
     result = cufftExecC2C(plan,
                           (cufftComplex *)dev_f0,
                           (cufftComplex *)dev_fft_output,
                           CUFFT_INVERSE);
     cudaDeviceSynchronize();
+
+    cudaEventRecord(event5);
+
+    // IFFT Cleanup
     cufftDestroy(plan);
 
-    // ch 1
+    cudaEventRecord(event6);
+
+    // Post-processing
     var_t *c0_output_offset = dev_output + (overlap >> 1);
     var_t *c1_output_offset = dev_output1 + (overlap >> 1);
     CHECK_CUDA_ERROR(cudaMemcpy(c0_output_offset, dev_fft_output, size_fft, cudaMemcpyDeviceToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(c1_output_offset, (char *)dev_fft_output + size_fft, size_fft, cudaMemcpyDeviceToDevice));
-    CHECK_LAST_CUDA_ERROR(); // Check for errors after FFT execution
-    cudaDeviceSynchronize(); // Ensure all operations are complete
+    CHECK_LAST_CUDA_ERROR();
+    cudaDeviceSynchronize();
 
-    // post-rotation and mirror
     int max_elements = max((N4 + 1) >> 1, overlap / 2);
     int numBlocksFused = (max_elements + blockSize - 1) / blockSize;
     postAndMirrorKernelFused<<<numBlocksFused, blockSize>>>(dev_output, dev_output1, dev_t, dev_window,
                                                            N2, N4, shift, sine, overlap);
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
-    
-    // Stop GPU kernel timing
-    // cudaEventRecord(stop);
-    // cudaEventSynchronize(stop);
-    // float kernel_time = 0;
-    // cudaEventElapsedTime(&kernel_time, start, stop);
 
-    // Update statistics
-    // total_kernel_time += kernel_time;
-    // call_count++;
-    
-    // float avg_time = total_kernel_time / call_count;
+    cudaEventRecord(event7);
 
-    // printf("MDCT Performance (#%d):\n", call_count);
-    // printf("  Current Kernel Time: %.3f ms\n", kernel_time);
-    // printf("  Average Kernel Time: %.3f ms\n", avg_time);
-    
-    // Copy final results and print
+    // Device to Host transfer
     CHECK_CUDA_ERROR(cudaMemcpy(output[0], dev_output, size_output, cudaMemcpyDeviceToHost));
     CHECK_CUDA_ERROR(cudaMemcpy(output[1], dev_output1, size_output, cudaMemcpyDeviceToHost));
 
-    // Cleanup
-    // cudaEventDestroy(start);
-    // cudaEventDestroy(stop);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    // Calculate timing for each section
+    cudaEventElapsedTime(&mem_alloc_time, start, event1);
+    cudaEventElapsedTime(&h2d_time, event1, event2);
+    cudaEventElapsedTime(&preproc_time, event2, event3);
+    cudaEventElapsedTime(&ifft_plan_time, event3, event4);
+    cudaEventElapsedTime(&ifft_exec_time, event4, event5);
+    cudaEventElapsedTime(&ifft_cleanup_time, event5, event6);
+    cudaEventElapsedTime(&postproc_time, event6, event7);
+    cudaEventElapsedTime(&d2h_time, event7, stop);
+    cudaEventElapsedTime(&total_time, start, stop);
+
+    // Calculate IFFT overhead
+    float ifft_total = ifft_plan_time + ifft_exec_time + ifft_cleanup_time;
+    float other_time = total_time - (mem_alloc_time + h2d_time + preproc_time + 
+                                   ifft_total + postproc_time + d2h_time);
+
+    // Print timing statistics
+    printf("\nMDCT CUDA Timing Statistics:\n");
+    printf("Total Time:                  %.3f ms (100.0%%)\n", total_time);
+    printf("Memory Allocation:           %.3f ms (%5.1f%%)\n", mem_alloc_time, mem_alloc_time/total_time*100);
+    printf("Host to Device Transfer:     %.3f ms (%5.1f%%)\n", h2d_time, h2d_time/total_time*100);
+    printf("Pre-processing:              %.3f ms (%5.1f%%)\n", preproc_time, preproc_time/total_time*100);
+    printf("IFFT Total:                  %.3f ms (%5.1f%%)\n", ifft_total, ifft_total/total_time*100);
+    printf("  IFFT Plan:                 %.3f ms (%5.1f%%)\n", ifft_plan_time, ifft_plan_time/total_time*100);
+    printf("  IFFT Execute:              %.3f ms (%5.1f%%)\n", ifft_exec_time, ifft_exec_time/total_time*100);
+    printf("  IFFT Cleanup:              %.3f ms (%5.1f%%)\n", ifft_cleanup_time, ifft_cleanup_time/total_time*100);
+    printf("Post-processing:             %.3f ms (%5.1f%%)\n", postproc_time, postproc_time/total_time*100);
+    printf("Device to Host Transfer:     %.3f ms (%5.1f%%)\n", d2h_time, d2h_time/total_time*100);
+    printf("Other/Overhead:              %.3f ms (%5.1f%%)\n", other_time, other_time/total_time*100);
+
+    // Cleanup events
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    cudaEventDestroy(event1);
+    cudaEventDestroy(event2);
+    cudaEventDestroy(event3);
+    cudaEventDestroy(event4);
+    cudaEventDestroy(event5);
+    cudaEventDestroy(event6);
+    cudaEventDestroy(event7);
+
+    // Cleanup device memory
     cudaFree(dev_buf_ptr);
 }
 
