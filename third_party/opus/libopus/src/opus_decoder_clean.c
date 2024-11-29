@@ -210,35 +210,20 @@ static int opus_packet_get_mode(const unsigned char *data)
 static int opus_decode_frame(OpusDecoder *st, const unsigned char *data,
                              opus_int32 len, opus_val16 *pcm, int frame_size, int decode_fec)
 {
-    void *silk_dec;
     CELTDecoder *celt_dec;
-    int i, silk_ret = 0, celt_ret = 0;
+    int i, celt_ret = 0;
     ec_dec dec;
-    opus_int32 silk_frame_size;
-    int pcm_silk_size;
-    VARDECL(opus_int16, pcm_silk);
-    int pcm_transition_silk_size;
-    VARDECL(opus_val16, pcm_transition_silk);
-    int pcm_transition_celt_size;
-    VARDECL(opus_val16, pcm_transition_celt);
-    opus_val16 *pcm_transition;
     int redundant_audio_size;
     VARDECL(opus_val16, redundant_audio);
 
     int audiosize;
     int mode;
-    int transition = 0;
     int start_band;
-    int redundancy = 0;
-    int redundancy_bytes = 0;
-    int celt_to_silk = 0;
     int c;
     int F2_5, F5, F10, F20;
     const opus_val16 *window;
-    opus_uint32 redundant_rng = 0;
     ALLOC_STACK;
 
-    silk_dec = (char *)st + st->silk_dec_offset;
     celt_dec = (CELTDecoder *)((char *)st + st->celt_dec_offset);
     F20 = st->Fs / 50;
     F10 = F20 >> 1;
@@ -266,61 +251,8 @@ static int opus_decode_frame(OpusDecoder *st, const unsigned char *data,
     }
     else
     {
-        audiosize = frame_size;
-        mode = st->prev_mode;
-
-        if (mode == 0)
-        {
-            /* If we haven't got any packet yet, all we can do is return zeros */
-            for (i = 0; i < audiosize * st->channels; i++)
-                pcm[i] = 0;
-            RESTORE_STACK;
-            return audiosize;
-        }
-
-        /* Avoids trying to run the PLC on sizes other than 2.5 (CELT), 5 (CELT),
-           10, or 20 (e.g. 12.5 or 30 ms). */
-        if (audiosize > F20)
-        {
-            do
-            {
-                int ret = opus_decode_frame(st, NULL, 0, pcm, IMIN(audiosize, F20), 0);
-                if (ret < 0)
-                {
-                    RESTORE_STACK;
-                    return ret;
-                }
-                pcm += ret * st->channels;
-                audiosize -= ret;
-            } while (audiosize > 0);
-            RESTORE_STACK;
-            return frame_size;
-        }
-        else if (audiosize < F20)
-        {
-            if (audiosize > F10)
-                audiosize = F10;
-            else if (mode != MODE_SILK_ONLY && audiosize > F5 && audiosize < F10)
-                audiosize = F5;
-        }
-    }
-
-    pcm_transition_silk_size = ALLOC_NONE;
-    pcm_transition_celt_size = ALLOC_NONE;
-    if (data != NULL && st->prev_mode > 0 && ((mode == MODE_CELT_ONLY && st->prev_mode != MODE_CELT_ONLY && !st->prev_redundancy) || (mode != MODE_CELT_ONLY && st->prev_mode == MODE_CELT_ONLY)))
-    {
-        transition = 1;
-        /* Decide where to allocate the stack memory for pcm_transition */
-        if (mode == MODE_CELT_ONLY)
-            pcm_transition_celt_size = F5 * st->channels;
-        else
-            pcm_transition_silk_size = F5 * st->channels;
-    }
-    ALLOC(pcm_transition_celt, pcm_transition_celt_size, opus_val16);
-    if (transition && mode == MODE_CELT_ONLY)
-    {
-        pcm_transition = pcm_transition_celt;
-        opus_decode_frame(st, NULL, 0, pcm_transition, IMIN(F5, audiosize), 0);
+        audiosize = 0;
+        celt_assert(0);
     }
     if (audiosize > frame_size)
     {
@@ -333,109 +265,13 @@ static int opus_decode_frame(OpusDecoder *st, const unsigned char *data,
         frame_size = audiosize;
     }
 
-    /* Don't allocate any memory when in CELT-only mode */
-    pcm_silk_size = (mode != MODE_CELT_ONLY) ? IMAX(F10, frame_size) * st->channels : ALLOC_NONE;
-    ALLOC(pcm_silk, pcm_silk_size, opus_int16);
-
     /* SILK processing */
     if (mode != MODE_CELT_ONLY)
     {
-        int lost_flag, decoded_samples;
-        opus_int16 *pcm_ptr = pcm_silk;
-
-        if (st->prev_mode == MODE_CELT_ONLY)
-            silk_InitDecoder(silk_dec);
-
-        /* The SILK PLC cannot produce frames of less than 10 ms */
-        st->DecControl.payloadSize_ms = IMAX(10, 1000 * audiosize / st->Fs);
-
-        if (data != NULL)
-        {
-            st->DecControl.nChannelsInternal = st->stream_channels;
-            if (mode == MODE_SILK_ONLY)
-            {
-                if (st->bandwidth == OPUS_BANDWIDTH_NARROWBAND)
-                {
-                    st->DecControl.internalSampleRate = 8000;
-                }
-                else if (st->bandwidth == OPUS_BANDWIDTH_MEDIUMBAND)
-                {
-                    st->DecControl.internalSampleRate = 12000;
-                }
-                else if (st->bandwidth == OPUS_BANDWIDTH_WIDEBAND)
-                {
-                    st->DecControl.internalSampleRate = 16000;
-                }
-                else
-                {
-                    st->DecControl.internalSampleRate = 16000;
-                    silk_assert(0);
-                }
-            }
-            else
-            {
-                /* Hybrid mode */
-                st->DecControl.internalSampleRate = 16000;
-            }
-        }
-
-        lost_flag = data == NULL ? 1 : 2 * decode_fec;
-        decoded_samples = 0;
-        do
-        {
-            /* Call SILK decoder */
-            int first_frame = decoded_samples == 0;
-            silk_ret = silk_Decode(silk_dec, &st->DecControl,
-                                   lost_flag, first_frame, &dec, pcm_ptr, &silk_frame_size);
-            if (silk_ret)
-            {
-                if (lost_flag)
-                {
-                    /* PLC failure should not be fatal */
-                    silk_frame_size = frame_size;
-                    for (i = 0; i < frame_size * st->channels; i++)
-                        pcm_ptr[i] = 0;
-                }
-                else
-                {
-                    RESTORE_STACK;
-                    return OPUS_INTERNAL_ERROR;
-                }
-            }
-            pcm_ptr += silk_frame_size * st->channels;
-            decoded_samples += silk_frame_size;
-        } while (decoded_samples < frame_size);
+        celt_assert(0);
     }
 
     start_band = 0;
-    if (!decode_fec && mode != MODE_CELT_ONLY && data != NULL && ec_tell(&dec) + 17 + 20 * (st->mode == MODE_HYBRID) <= 8 * len)
-    {
-        /* Check if we have a redundant 0-8 kHz band */
-        if (mode == MODE_HYBRID)
-            redundancy = ec_dec_bit_logp(&dec, 12);
-        else
-            redundancy = 1;
-        if (redundancy)
-        {
-            celt_to_silk = ec_dec_bit_logp(&dec, 1);
-            /* redundancy_bytes will be at least two, in the non-hybrid
-               case due to the ec_tell() check above */
-            redundancy_bytes = mode == MODE_HYBRID ? (opus_int32)ec_dec_uint(&dec, 256) + 2 : len - ((ec_tell(&dec) + 7) >> 3);
-            len -= redundancy_bytes;
-            /* This is a sanity check. It should never happen for a valid
-               packet, so the exact behaviour is not normative. */
-            if (len * 8 < ec_tell(&dec))
-            {
-                len = 0;
-                redundancy_bytes = 0;
-                redundancy = 0;
-            }
-            /* Shrink decoder because of raw bits */
-            dec.storage -= redundancy_bytes;
-        }
-    }
-    if (mode != MODE_CELT_ONLY)
-        start_band = 17;
 
     {
         int endband = 21;
@@ -460,33 +296,6 @@ static int opus_decode_frame(OpusDecoder *st, const unsigned char *data,
         celt_decoder_ctl(celt_dec, CELT_SET_CHANNELS(st->stream_channels));
     }
 
-    if (redundancy)
-    {
-        transition = 0;
-        pcm_transition_silk_size = ALLOC_NONE;
-    }
-
-    ALLOC(pcm_transition_silk, pcm_transition_silk_size, opus_val16);
-
-    if (transition && mode != MODE_CELT_ONLY)
-    {
-        pcm_transition = pcm_transition_silk;
-        opus_decode_frame(st, NULL, 0, pcm_transition, IMIN(F5, audiosize), 0);
-    }
-
-    /* Only allocation memory for redundancy if/when needed */
-    redundant_audio_size = redundancy ? F5 * st->channels : ALLOC_NONE;
-    ALLOC(redundant_audio, redundant_audio_size, opus_val16);
-
-    /* 5 ms redundant frame for CELT->SILK*/
-    if (redundancy && celt_to_silk)
-    {
-        celt_decoder_ctl(celt_dec, CELT_SET_START_BAND(0));
-        celt_decode_with_ec(celt_dec, data + len, redundancy_bytes,
-                            redundant_audio, F5, NULL);
-        celt_decoder_ctl(celt_dec, OPUS_GET_FINAL_RANGE(&redundant_rng));
-    }
-
     /* MUST be after PLC */
     celt_decoder_ctl(celt_dec, CELT_SET_START_BAND(start_band));
 
@@ -502,77 +311,18 @@ static int opus_decode_frame(OpusDecoder *st, const unsigned char *data,
     }
     else
     {
-        unsigned char silence[2] = {0xFF, 0xFF};
-        for (i = 0; i < frame_size * st->channels; i++)
-            pcm[i] = 0;
-        /* For hybrid -> SILK transitions, we let the CELT MDCT
-           do a fade-out by decoding a silence frame */
-        if (st->prev_mode == MODE_HYBRID && !(redundancy && celt_to_silk && st->prev_redundancy))
-        {
-            celt_decoder_ctl(celt_dec, CELT_SET_START_BAND(0));
-            celt_decode_with_ec(celt_dec, silence, 2, pcm, F2_5, NULL);
-        }
+        celt_assert(0);
     }
 
     if (mode != MODE_CELT_ONLY)
     {
-#ifdef FIXED_POINT
-        for (i = 0; i < frame_size * st->channels; i++)
-            pcm[i] = SAT16(pcm[i] + pcm_silk[i]);
-#else
-        for (i = 0; i < frame_size * st->channels; i++)
-            pcm[i] = pcm[i] + (opus_val16)((1.f / 32768.f) * pcm_silk[i]);
-#endif
+        celt_assert(0);
     }
 
     {
         const CELTMode *celt_mode;
         celt_decoder_ctl(celt_dec, CELT_GET_MODE(&celt_mode));
         window = celt_mode->window;
-    }
-
-    /* 5 ms redundant frame for SILK->CELT */
-    if (redundancy && !celt_to_silk)
-    {
-        celt_decoder_ctl(celt_dec, OPUS_RESET_STATE);
-        celt_decoder_ctl(celt_dec, CELT_SET_START_BAND(0));
-
-        celt_decode_with_ec(celt_dec, data + len, redundancy_bytes, redundant_audio, F5, NULL);
-        celt_decoder_ctl(celt_dec, OPUS_GET_FINAL_RANGE(&redundant_rng));
-        smooth_fade(pcm + st->channels * (frame_size - F2_5), redundant_audio + st->channels * F2_5,
-                    pcm + st->channels * (frame_size - F2_5), F2_5, st->channels, window, st->Fs);
-    }
-    if (redundancy && celt_to_silk)
-    {
-        for (c = 0; c < st->channels; c++)
-        {
-            for (i = 0; i < F2_5; i++)
-                pcm[st->channels * i + c] = redundant_audio[st->channels * i + c];
-        }
-        smooth_fade(redundant_audio + st->channels * F2_5, pcm + st->channels * F2_5,
-                    pcm + st->channels * F2_5, F2_5, st->channels, window, st->Fs);
-    }
-    if (transition)
-    {
-        if (audiosize >= F5)
-        {
-            for (i = 0; i < st->channels * F2_5; i++)
-                pcm[i] = pcm_transition[i];
-            smooth_fade(pcm_transition + st->channels * F2_5, pcm + st->channels * F2_5,
-                        pcm + st->channels * F2_5, F2_5,
-                        st->channels, window, st->Fs);
-        }
-        else
-        {
-            /* Not enough time to do a clean transition, but we do it anyway
-               This will not preserve amplitude perfectly and may introduce
-               a bit of temporal aliasing, but it shouldn't be too bad and
-               that's pretty much the best we can do. In any case, generating this
-               transition it pretty silly in the first place */
-            smooth_fade(pcm_transition, pcm,
-                        pcm, F2_5,
-                        st->channels, window, st->Fs);
-        }
     }
 
     if (st->decode_gain)
@@ -590,10 +340,10 @@ static int opus_decode_frame(OpusDecoder *st, const unsigned char *data,
     if (len <= 1)
         st->rangeFinal = 0;
     else
-        st->rangeFinal = dec.rng ^ redundant_rng;
+        st->rangeFinal = dec.rng ^ 0;
 
     st->prev_mode = mode;
-    st->prev_redundancy = redundancy && !celt_to_silk;
+    st->prev_redundancy = 0;
 
     if (celt_ret >= 0)
     {
@@ -620,25 +370,6 @@ int opus_decode_native(OpusDecoder *st, const unsigned char *data,
     /* For FEC/PLC, frame_size has to be to have a multiple of 2.5 ms */
     if ((decode_fec || len == 0 || data == NULL) && frame_size % (st->Fs / 400) != 0)
         return OPUS_BAD_ARG;
-    if (len == 0 || data == NULL)
-    {
-        int pcm_count = 0;
-        do
-        {
-            int ret;
-            ret = opus_decode_frame(st, NULL, 0, pcm + pcm_count * st->channels, frame_size - pcm_count, 0);
-            if (ret < 0)
-                return ret;
-            pcm_count += ret;
-        } while (pcm_count < frame_size);
-        celt_assert(pcm_count == frame_size);
-        if (OPUS_CHECK_ARRAY(pcm, pcm_count * st->channels))
-            OPUS_PRINT_INT(pcm_count);
-        st->last_packet_duration = pcm_count;
-        return pcm_count;
-    }
-    else if (len < 0)
-        return OPUS_BAD_ARG;
 
     packet_mode = opus_packet_get_mode(data);
     packet_bandwidth = opus_packet_get_bandwidth(data);
@@ -652,43 +383,6 @@ int opus_decode_native(OpusDecoder *st, const unsigned char *data,
 
     data += offset;
 
-    if (decode_fec)
-    {
-        int duration_copy;
-        int ret;
-        /* If no FEC can be present, run the PLC (recursive call) */
-        if (frame_size < packet_frame_size || packet_mode == MODE_CELT_ONLY || st->mode == MODE_CELT_ONLY)
-            return opus_decode_native(st, NULL, 0, pcm, frame_size, 0, 0, NULL, soft_clip);
-        /* Otherwise, run the PLC on everything except the size for which we might have FEC */
-        duration_copy = st->last_packet_duration;
-        if (frame_size - packet_frame_size != 0)
-        {
-            ret = opus_decode_native(st, NULL, 0, pcm, frame_size - packet_frame_size, 0, 0, NULL, soft_clip);
-            if (ret < 0)
-            {
-                st->last_packet_duration = duration_copy;
-                return ret;
-            }
-            celt_assert(ret == frame_size - packet_frame_size);
-        }
-        /* Complete with FEC */
-        st->mode = packet_mode;
-        st->bandwidth = packet_bandwidth;
-        st->frame_size = packet_frame_size;
-        st->stream_channels = packet_stream_channels;
-        ret = opus_decode_frame(st, data, size[0], pcm + st->channels * (frame_size - packet_frame_size),
-                                packet_frame_size, 1);
-        if (ret < 0)
-            return ret;
-        else
-        {
-            if (OPUS_CHECK_ARRAY(pcm, frame_size * st->channels))
-                OPUS_PRINT_INT(frame_size);
-            st->last_packet_duration = frame_size;
-            return frame_size;
-        }
-    }
-
     if (count * packet_frame_size > frame_size)
         return OPUS_BUFFER_TOO_SMALL;
 
@@ -699,8 +393,9 @@ int opus_decode_native(OpusDecoder *st, const unsigned char *data,
     st->stream_channels = packet_stream_channels;
 
     nb_samples = 0;
-    for (i = 0; i < count; i++)
+    celt_assert(count == 1);
     {
+        int i = 0;
         int ret;
         ret = opus_decode_frame(st, data, size[i], pcm + nb_samples * st->channels, frame_size - nb_samples, 0);
         if (ret < 0)
@@ -710,14 +405,7 @@ int opus_decode_native(OpusDecoder *st, const unsigned char *data,
         nb_samples += ret;
     }
     st->last_packet_duration = nb_samples;
-    if (OPUS_CHECK_ARRAY(pcm, nb_samples * st->channels))
-        OPUS_PRINT_INT(nb_samples);
-#ifndef FIXED_POINT
-    if (soft_clip)
-        opus_pcm_soft_clip(pcm, nb_samples, st->channels, st->softclip_mem);
-    else
-        st->softclip_mem[0] = st->softclip_mem[1] = 0;
-#endif
+    st->softclip_mem[0] = st->softclip_mem[1] = 0;
     return nb_samples;
 }
 
