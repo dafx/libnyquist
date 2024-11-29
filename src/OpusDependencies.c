@@ -93,7 +93,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "opus/celt/vq.c"
 
 //#define opus_custom_encoder_get_size opus_custom_encoder_get_size_alt
-#include "opus/celt/celt_decoder.c"
+#include "opus/celt/celt_decoder_clean.c"
 #include "opus/celt/celt_encoder.c"
 
 /////////////////
@@ -244,7 +244,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /////////////
 
 #include "opus/libopus/src/opus.c"
-#include "opus/libopus/src/opus_decoder.c"
+#include "opus/libopus/src/opus_decoder_clean.c"
 #include "opus/libopus/src/opus_encoder.c"
 #include "opus/libopus/src/opus_multistream.c"
 #include "opus/libopus/src/opus_multistream_decoder.c"

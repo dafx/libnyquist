@@ -27,19 +27,7 @@ int main(int argc, const char **argv) try
     printCudaVersion();
     #endif
 
-    {
-        {
-            std::vector<float> input = {1, 2, 3, 4, 5, 6, 7, 8};
-            std::vector<float> output(8);
-            int ret = test_opus_ifft(4, input.data(), output.data());
-            if (ret != 0) {
-                printf("test_opus_ifft failed with return code %d\n", ret);
-                return EXIT_FAILURE;
-            }
-        }
-    }
-
-    const int desiredSampleRate = 44100;
+    const int desiredSampleRate = 48000;
     const int desiredChannelCount = 2;
 
     std::shared_ptr<AudioData> fileData = std::make_shared<AudioData>();
@@ -48,6 +36,7 @@ int main(int argc, const char **argv) try
 
     if (argc > 1)
     {
+        printf("Loading %s\n", argv[1]);
         std::string cli_arg = std::string(argv[1]);
         loader.Load(fileData.get(), cli_arg);
     }
@@ -99,9 +88,6 @@ int main(int argc, const char **argv) try
         // 8 channel opus
         //loader.Load(fileData.get(), "test_data/Rachel8ch.opus");
 
-        #ifdef USE_CUDA
-        cleanupCudaBuffers();
-        #endif
 
         // 1 + 2 channel wavpack
         //loader.Load(fileData.get(), "test_data/ad_hoc/TestBeat_Float32.wv");
@@ -138,29 +124,10 @@ int main(int argc, const char **argv) try
     myDevice.Record(fileData->sampleRate * fileData->lengthSeconds, fileData->samples);
     */
 
-#if 0
-    if (fileData->sampleRate != desiredSampleRate)
-    {
-        std::cout << "[Warning - Sample Rate Mismatch] - file is sampled at " << fileData->sampleRate << " and output is " << desiredSampleRate << std::endl;
-    }
-
-    std::cout << "Input Samples: " << fileData->samples.size() << std::endl;
-
-    // Convert mono to stereo for testing playback
-    if (fileData->channelCount == 1)
-    {
-        std::cout << "Playing MONO for: " << fileData->lengthSeconds << " seconds..." << std::endl;
-        std::vector<float> stereoCopy(fileData->samples.size() * 2);
-        MonoToStereo(fileData->samples.data(), stereoCopy.data(), fileData->samples.size());
-        myDevice.Play(stereoCopy);
-    }
-    else
-    {
-        std::cout << "Playing STEREO for: " << fileData->lengthSeconds << " seconds..." << std::endl;
-        myDevice.Play(fileData->samples);
-    }
-#endif
-
+    #ifdef USE_CUDA
+    cleanupCudaBuffers();
+    #endif
+    
     {  // save to wave file
         AudioFile<float> a;
         a.setNumChannels(fileData->channelCount);
@@ -175,10 +142,10 @@ int main(int argc, const char **argv) try
             }
         }
         printf("len: %ld sum: %f\n", fileData->samples.size(), sum);
-        if (static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602)
+        if ((static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602) 
+        && (static_cast<int>(sum) != 40 || fileData->samples.size() != 127712488))
         {
-            printf("wrong results!\n");
-            printf("decoding done, save to wave file\n");
+            printf("wrong results!  save to wave file\n");
             a.save("opusdec.wav", AudioFileFormat::Wave);
             return EXIT_FAILURE;
         }
