@@ -12,6 +12,7 @@ set(CMAKE_CUDA_ARCHITECTURES 52 60 61 70 75 80)
 # Add the source files for the library
 set(SOURCES
     mdct_cuda.cu
+    mdct_cuda_b8.cu
     fft.cu
 )
 

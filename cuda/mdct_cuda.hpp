@@ -87,6 +87,10 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2],
                          const var_t *trig, int N, int shift, int stride,
                          var_t sine, int overlap, const var_t *window);
 
+void processMDCTCudaB8C2(const var_t *input[8], var_t *output[8],
+                         const var_t *trig, int N, int shift, int stride,
+                         var_t sine, int overlap, const var_t *window);
+                         
 void cleanupCudaBuffers();
 
 // Performance test function declaration
