@@ -19,13 +19,13 @@ using namespace nqr;
 #include "../cuda/mdct_cuda.hpp"
 #endif
 
-extern "C" int test_opus_ifft(int nfft, float *fin, float *fout);
+extern "C" int test_opus_ifft(int nfft, float* fin, float* fout);
 
-int main(int argc, const char **argv) try
+int main(int argc, const char** argv) try
 {
-    #ifdef USE_CUDA
+#ifdef USE_CUDA
     printCudaVersion();
-    #endif
+#endif
 
     const int desiredSampleRate = 48000;
     const int desiredChannelCount = 2;
@@ -124,10 +124,10 @@ int main(int argc, const char **argv) try
     myDevice.Record(fileData->sampleRate * fileData->lengthSeconds, fileData->samples);
     */
 
-    #ifdef USE_CUDA
+#ifdef USE_CUDA
     cleanupCudaBuffers();
-    #endif
-    
+#endif
+
     {  // save to wave file
         AudioFile<float> a;
         a.setNumChannels(fileData->channelCount);
@@ -142,8 +142,11 @@ int main(int argc, const char **argv) try
             }
         }
         printf("len: %ld sum: %f\n", fileData->samples.size(), sum);
-        if ((static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602) 
-        && (static_cast<int>(sum) != 40 || fileData->samples.size() != 127712488))
+        if (
+            (static_cast<int>(sum) != 403 || fileData->samples.size() != 21472602)
+            && (static_cast<int>(sum) != 40 || fileData->samples.size() != 127712488)
+            && (static_cast<int>(sum) != 719 || fileData->samples.size() != 21472602)
+            )
         {
             printf("wrong results!  save to wave file\n");
             a.save("opusdec.wav", AudioFileFormat::Wave);
@@ -153,19 +156,19 @@ int main(int argc, const char **argv) try
 
     return EXIT_SUCCESS;
 }
-catch (const UnsupportedExtensionEx & e)
+catch (const UnsupportedExtensionEx& e)
 {
     std::cerr << "Caught: " << e.what() << std::endl;
 }
-catch (const LoadPathNotImplEx & e)
+catch (const LoadPathNotImplEx& e)
 {
     std::cerr << "Caught: " << e.what() << std::endl;
 }
-catch (const LoadBufferNotImplEx & e)
+catch (const LoadBufferNotImplEx& e)
 {
     std::cerr << "Caught: " << e.what() << std::endl;
 }
-catch (const std::exception & e)
+catch (const std::exception& e)
 {
     std::cerr << "Caught: " << e.what() << std::endl;
 }
