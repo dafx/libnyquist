@@ -209,4 +209,9 @@ if (LIBNYQUIST_BUILD_EXAMPLE)
             COMMAND $<TARGET_FILE:libnyquist-examples> ./test_data/Rachel8ch.opus
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             )
+
+    add_test(NAME libnyquist_example_test_60ms
+            COMMAND $<TARGET_FILE:libnyquist-examples> ./test_data/sb-reverie-60ms-frames.opus
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            )
 endif()

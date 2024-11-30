@@ -71,13 +71,13 @@ typedef struct
 } mdct_b8_cuda_state;
 
 // MDCT state management functions
-mdct_cuda_state *mdct_b8_cuda_create(int N, int shift, int stride, int overlap);
-void mdct_b8_cuda_destroy(mdct_cuda_state *state);
-void mdct_b8_cuda_process(mdct_cuda_state *state, const var_t *input[2],
-                       var_t *output[2], const var_t *trig, const var_t *window,
-                       var_t sine);
+mdct_b8_cuda_state *mdct_b8_cuda_create(int N, int shift, int stride, int overlap);
+void mdct_b8_cuda_destroy(mdct_b8_cuda_state *state);
+void mdct_b8_cuda_process(mdct_b8_cuda_state *state, const var_t *input[2],
+                          var_t *output[2], const var_t *trig, const var_t *window,
+                          var_t sine);
 
-__global__ void postAndMirrorKernelFused(var_t *d_out_ch0, var_t *d_out_ch1,
+__global__ void postAndMirrorKernelFused8(var_t *d_out_ch0, var_t *d_out_ch1,
                                          const var_t *t, const var_t *window,
                                          int N2, int N4, int shift, var_t sine,
                                          int overlap)
@@ -209,7 +209,7 @@ __global__ void postAndMirrorKernelFused(var_t *d_out_ch0, var_t *d_out_ch1,
     }
 }
 
-__global__ void doPreRotationFused(const var_t *xp1_ch0, const var_t *xp1_ch1,
+__global__ void doPreRotationFused8(const var_t *xp1_ch0, const var_t *xp1_ch1,
                                    var_t *yp_ch0, var_t *yp_ch1, const var_t *t,
                                    int N4, int shift, int stride, int N2,
                                    var_t sine)
@@ -247,9 +247,9 @@ __global__ void doPreRotationFused(const var_t *xp1_ch0, const var_t *xp1_ch1,
 }
 
 // Create MDCT CUDA state
-mdct_b8_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap)
+mdct_b8_cuda_state *mdct_b8_cuda_create(int N, int shift, int stride, int overlap)
 {
-    mdct_b8_cuda_state *state = (mdct_cuda_state *)malloc(sizeof(mdct_b8_cuda_state));
+    mdct_b8_cuda_state *state = (mdct_b8_cuda_state *)malloc(sizeof(mdct_b8_cuda_state));
     if (!state)
         return nullptr;
 
@@ -384,7 +384,7 @@ void mdct_b8_cuda_process(mdct_b8_cuda_state *state, const var_t *input[2],
     int blockSize = 256;
     int numBlocks = (state->N4 + blockSize - 1) / blockSize;
 
-    doPreRotationFused<<<numBlocks, blockSize>>>(
+    doPreRotationFused8<<<numBlocks, blockSize>>>(
         state->dev_input, state->dev_input1, state->dev_f0, state->dev_f1,
         state->dev_t, state->N4, state->shift, state->stride, state->N2, sine);
 
@@ -411,7 +411,7 @@ void mdct_b8_cuda_process(mdct_b8_cuda_state *state, const var_t *input[2],
     // Post-rotation and mirror
     int max_elements = max((state->N4 + 1) >> 1, state->overlap / 2);
     int numBlocksFused = (max_elements + blockSize - 1) / blockSize;
-    postAndMirrorKernelFused<<<numBlocksFused, blockSize>>>(
+    postAndMirrorKernelFused8<<<numBlocksFused, blockSize>>>(
         state->dev_output, state->dev_output1, state->dev_t, state->dev_window,
         state->N2, state->N4, state->shift, sine, state->overlap);
 
