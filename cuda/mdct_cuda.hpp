@@ -59,6 +59,8 @@ typedef struct {
   size_t size_window;
   size_t size_fft;
 
+  size_t total_size;
+
   // State
   int initialized;
 } mdct_cuda_state;

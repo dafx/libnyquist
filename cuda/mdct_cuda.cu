@@ -403,9 +403,18 @@ void printCudaVersion() {
   fprintf(stderr, "CUDA Driver version: %d\n", driver_ver);
 }
 
-#include <unordered_map>
-static std::unordered_map<int, var_t *> dev_buf;
-static std::unordered_map<int, cuda_fft_state *> fft_buf;
+size_t get_mdct_cuda_state_size(int N, int shift, int stride, int overlap) {
+  size_t size_input = N >> 2;
+  size_t size_output = (N >> 1) + overlap;
+  size_t size_fft = N >> 2;
+  size_t size_trig = (N >> 2) << shift;
+  size_t size_window = overlap;
+
+  size_t total_size = size_input * 2 + size_output * 2 + size_trig +
+                      size_window + size_fft * 4;
+
+  return total_size;
+}
 
 // Create MDCT CUDA state
 mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
@@ -430,12 +439,12 @@ mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
   state->size_window = overlap * sizeof(var_t);
 
   // Allocate device memory
-  size_t total_size = state->size_input * 2 + state->size_output * 2 +
+  state->total_size = state->size_input * 2 + state->size_output * 2 +
                       state->size_trig + state->size_window +
                       state->size_fft * 4;
 
   var_t *dev_buf;
-  if (cudaMalloc(&dev_buf, total_size) != cudaSuccess) {
+  if (cudaMalloc(&dev_buf, state->total_size) != cudaSuccess) {
     free(state);
     return nullptr;
   }
@@ -468,6 +477,8 @@ mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
   }
 
   state->initialized = true;
+
+  printf("MDCT CUDA state created %d\n", int(state->total_size));
   return state;
 }
 
@@ -540,37 +551,36 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
              cudaMemcpyDeviceToHost);
 }
 
+#include <unordered_map>
+static std::unordered_map<size_t, mdct_cuda_state*> states;
+
 // Update the original function to use the new state management
 void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2],
                          const var_t *trig, int N, int shift, int stride,
                          var_t sine, int overlap, const var_t *window) {
-  static mdct_cuda_state *state = nullptr;
+
+  // Calculate state size
+  size_t state_size = get_mdct_cuda_state_size(N, shift, stride, overlap);
 
   // Create state if not exists
-  if (!state) {
-    state = mdct_cuda_create(N, shift, stride, overlap);
-    if (!state) {
+  if (states.find(state_size) == states.end()) {
+    states[state_size] = mdct_cuda_create(N, shift, stride, overlap);
+    if (!states[state_size]) {
       printf("Failed to create MDCT CUDA state\n");
       return;
     }
   }
 
   // Process using persistent state
-  mdct_cuda_process(state, input, output, trig, window, sine);
+  mdct_cuda_process(states[state_size], input, output, trig, window, sine);
 }
 
 // Update cleanup function
 void cleanupCudaBuffers() {
-  // Add cleanup for static state if needed
-  // Note: This function might need to be called explicitly at program end
-  for (auto &it : dev_buf) {
-    cudaFree(it.second);
+  for (auto &state : states) {
+    mdct_cuda_destroy(state.second);
   }
-  dev_buf.clear();
-  for (auto &it : fft_buf) {
-    cuda_fft_free(it.second);
-  }
-  fft_buf.clear();
+  states.clear();
 }
 
 // Performance test function
