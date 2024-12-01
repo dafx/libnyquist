@@ -289,8 +289,18 @@ compute_inv_mdcts(const CELTMode *mode, int shortBlocks, celt_sig *X,
         float *out[2] = {(float *)out_mem[0], (float *)out_mem[1]};
         clt_mdct_backward_B1_C2(&mode->mdct, in, out, mode->window, overlap, shift, 1);
     }
+    else if (B == 8 && C == 2)
+    {
+        for (b = 0; b < B; b++)
+        {
+            float *in[2] = {(float *)X + b + 0 * N * B, (float *)(X + b + 1 * N * B)};
+            float *out[2] = {(float *)out_mem[0] + N * b, (float *)out_mem[1] + N * b};
+            clt_mdct_backward_B1_C2(&mode->mdct, in, out, mode->window, overlap, shift, B);
+        }
+    }
     else
     {
+        celt_assert(0);
         c = 0;
         do
         {
