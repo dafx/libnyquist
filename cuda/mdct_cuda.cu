@@ -406,6 +406,9 @@ void printCudaVersion() {
 #include <unordered_map>
 static std::unordered_map<int, var_t *> dev_buf;
 static std::unordered_map<int, cuda_fft_state *> fft_buf;
+// Add persistent trig table storage
+static var_t* stored_trig = nullptr;
+static size_t stored_trig_size = 0;
 
 // Create MDCT CUDA state
 mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
@@ -527,7 +530,7 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
              cudaMemcpyHostToDevice);
   cudaMemcpy(state->dev_output1, output[1], state->size_output,
              cudaMemcpyHostToDevice);
-  cudaMemcpy(state->dev_t, trig, state->size_trig, cudaMemcpyHostToDevice);
+  // Skip trig table copy since we're using the persistent copy
   cudaMemcpy(state->dev_window, window, state->size_window,
              cudaMemcpyHostToDevice);
 
@@ -642,10 +645,29 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2],
       printf("Failed to create MDCT CUDA state\n");
       return;
     }
+    
+    // Allocate and copy trig table if not already done
+    if (!stored_trig) {
+      stored_trig_size = state->size_trig;
+      cudaMalloc(&stored_trig, stored_trig_size);
+      cudaMemcpy(stored_trig, trig, stored_trig_size, cudaMemcpyHostToDevice);
+      
+      // Point state's trig table to our persistent copy
+      state->dev_t = stored_trig;
+    }
   }
 
   // Process using persistent state
   mdct_cuda_process(state, input, output, trig, window, sine);
+}
+
+// Add cleanup function for persistent memory
+void mdct_cuda_cleanup() {
+    if (stored_trig) {
+        cudaFree(stored_trig);
+        stored_trig = nullptr;
+        stored_trig_size = 0;
+    }
 }
 
 // Update cleanup function
