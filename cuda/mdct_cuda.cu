@@ -406,9 +406,11 @@ void printCudaVersion() {
 #include <unordered_map>
 static std::unordered_map<int, var_t *> dev_buf;
 static std::unordered_map<int, cuda_fft_state *> fft_buf;
-// Add persistent trig table storage
+// Add persistent storage for trig and window tables
 static var_t* stored_trig = nullptr;
+static var_t* stored_window = nullptr;
 static size_t stored_trig_size = 0;
+static size_t stored_window_size = 0;
 
 // Create MDCT CUDA state
 mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
@@ -655,6 +657,16 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2],
       // Point state's trig table to our persistent copy
       state->dev_t = stored_trig;
     }
+    
+    // Allocate and copy window table if not already done
+    if (!stored_window) {
+      stored_window_size = state->size_window;
+      cudaMalloc(&stored_window, stored_window_size);
+      cudaMemcpy(stored_window, window, stored_window_size, cudaMemcpyHostToDevice);
+      
+      // Point state's window table to our persistent copy
+      state->dev_window = stored_window;
+    }
   }
 
   // Process using persistent state
@@ -667,6 +679,11 @@ void mdct_cuda_cleanup() {
         cudaFree(stored_trig);
         stored_trig = nullptr;
         stored_trig_size = 0;
+    }
+    if (stored_window) {
+        cudaFree(stored_window);
+        stored_window = nullptr;
+        stored_window_size = 0;
     }
 }
 
