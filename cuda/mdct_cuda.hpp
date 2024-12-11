@@ -8,6 +8,7 @@ extern "C" {
 #define var_t float
 #endif
 
+#ifdef __CUDACC__
 #include <cufft.h>
 
 // Add the FFT-related type definition
@@ -71,6 +72,7 @@ void mdct_cuda_destroy(mdct_cuda_state *state);
 void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
                        var_t *output[2], const var_t *trig, const var_t *window,
                        var_t sine);
+#endif
 
 void doPreRotation(const float *input, float *output, int N);
 void preRotateWithCuda(const var_t *host_xp1, var_t *host_yp,
