@@ -406,12 +406,6 @@ void printCudaVersion() {
 #include <unordered_map>
 static std::unordered_map<int, var_t *> dev_buf;
 static std::unordered_map<int, cuda_fft_state *> fft_buf;
-// Add persistent storage for trig and window tables
-static var_t* stored_trig = nullptr;
-static var_t* stored_window = nullptr;
-static size_t stored_trig_size = 0;
-static size_t stored_window_size = 0;
-
 // Create MDCT CUDA state
 mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
   mdct_cuda_state *state = (mdct_cuda_state *)malloc(sizeof(mdct_cuda_state));
@@ -493,8 +487,7 @@ void mdct_cuda_destroy(mdct_cuda_state *state) {
 
 // Process MDCT using persistent state
 void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
-                       var_t *output[2], const var_t *trig, const var_t *window,
-                       var_t sine) {
+                       var_t *output[2], var_t sine) {
   if (!state || !state->initialized)
     return;
 
@@ -533,10 +526,7 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
   cudaMemcpy(state->dev_output1, output[1], state->size_output,
              cudaMemcpyHostToDevice);
   // Skip trig table copy since we're using the persistent copy
-  cudaMemcpy(state->dev_window, window, state->size_window,
-             cudaMemcpyHostToDevice);
-
-  cudaEventRecord(preproc_start);
+    cudaEventRecord(preproc_start);
   // Pre-rotation
   int blockSize = 256;
   int numBlocks = (state->N4 + blockSize - 1) / blockSize;
@@ -647,45 +637,16 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2],
       printf("Failed to create MDCT CUDA state\n");
       return;
     }
-    
-    // Allocate and copy trig table if not already done
-    if (!stored_trig) {
-      stored_trig_size = state->size_trig;
-      cudaMalloc(&stored_trig, stored_trig_size);
-      cudaMemcpy(stored_trig, trig, stored_trig_size, cudaMemcpyHostToDevice);
-      
-      // Point state's trig table to our persistent copy
-      state->dev_t = stored_trig;
-    }
-    
-    // Allocate and copy window table if not already done
-    if (!stored_window) {
-      stored_window_size = state->size_window;
-      cudaMalloc(&stored_window, stored_window_size);
-      cudaMemcpy(stored_window, window, stored_window_size, cudaMemcpyHostToDevice);
-      
-      // Point state's window table to our persistent copy
-      state->dev_window = stored_window;
-    }
+
+    // copy trig and windows from host to device
+    cudaMemcpy(state->dev_t, trig, state->size_trig, cudaMemcpyHostToDevice);
+    cudaMemcpy(state->dev_window, window, state->size_window, cudaMemcpyHostToDevice);
   }
 
   // Process using persistent state
-  mdct_cuda_process(state, input, output, trig, window, sine);
+  mdct_cuda_process(state, input, output, sine);
 }
 
-// Add cleanup function for persistent memory
-void mdct_cuda_cleanup() {
-    if (stored_trig) {
-        cudaFree(stored_trig);
-        stored_trig = nullptr;
-        stored_trig_size = 0;
-    }
-    if (stored_window) {
-        cudaFree(stored_window);
-        stored_window = nullptr;
-        stored_window_size = 0;
-    }
-}
 
 // Update cleanup function
 void cleanupCudaBuffers() {
@@ -768,8 +729,8 @@ void performanceTest(int numIterations) {
     cudaEventElapsedTime(&milliseconds, start, stop);
 
     totalTime += milliseconds;
-    minTime = min(minTime, milliseconds);
-    maxTime = max(maxTime, milliseconds);
+    minTime = std::min(minTime, milliseconds);
+    maxTime = std::max(maxTime, milliseconds);
 
     if ((i + 1) % 10 == 0) {
       printf("Completed %d iterations...\n", i + 1);
