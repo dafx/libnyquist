@@ -62,6 +62,8 @@ typedef struct {
 
   size_t total_size;
 
+  cudaStream_t stream;
+
   // State
   int initialized;
 } mdct_cuda_state;

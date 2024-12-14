@@ -476,6 +476,8 @@ mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
     return nullptr;
   }
 
+  cudaStreamCreate(&(state->stream));
+
   state->initialized = true;
 
   printf("MDCT CUDA state created %d\n", int(state->total_size));
@@ -486,6 +488,8 @@ mdct_cuda_state *mdct_cuda_create(int N, int shift, int stride, int overlap) {
 void mdct_cuda_destroy(mdct_cuda_state *state) {
   if (state) {
     if (state->initialized) {
+
+      cudaStreamDestroy(state->stream);
       cudaFree(
           state->dev_input); // Free all device memory (allocated as one block)
       cufftDestroy(state->plan);
@@ -509,21 +513,24 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
              cudaMemcpyHostToDevice);
   cudaMemcpy(state->dev_input1, input[1], state->size_input,
              cudaMemcpyHostToDevice);
-  cudaMemcpy(state->dev_output, output[0], state->size_output,
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(state->dev_output1, output[1], state->size_output,
-             cudaMemcpyHostToDevice);
   cudaMemcpy(state->dev_t, trig, state->size_trig, cudaMemcpyHostToDevice);
   cudaMemcpy(state->dev_window, window, state->size_window,
              cudaMemcpyHostToDevice);
-             
+
   // Pre-rotation
   int blockSize = 256;
   int numBlocks = (state->N4 + blockSize - 1) / blockSize;
 
-  doPreRotationFused<<<numBlocks, blockSize>>>(
+  doPreRotationFused <<<numBlocks, blockSize, 0, state->stream >>> (
       state->dev_input, state->dev_input1, state->dev_f0, state->dev_f1,
       state->dev_t, state->N4, state->shift, state->stride, state->N2, sine);
+
+  cudaMemcpy(state->dev_output, output[0], state->size_output,
+    cudaMemcpyHostToDevice);
+  cudaMemcpy(state->dev_output1, output[1], state->size_output,
+    cudaMemcpyHostToDevice);
+
+  cudaStreamSynchronize(state->stream);
 
   var_t *c0_output_offset = state->dev_output + (state->overlap >> 1);
   var_t *c1_output_offset = state->dev_output1 + (state->overlap >> 1);
@@ -549,6 +556,7 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
              cudaMemcpyDeviceToHost);
   cudaMemcpy(output[1], state->dev_output1, state->size_output,
              cudaMemcpyDeviceToHost);
+  
 }
 
 #include <unordered_map>
