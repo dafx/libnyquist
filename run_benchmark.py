@@ -1,11 +1,12 @@
-import subprocess
+import argparse
 import os
 import re
-import statistics
-from pathlib import Path
 import shutil
-import argparse
+import statistics
+import subprocess
 import sys
+from pathlib import Path
+
 
 class BenchmarkRunner:
     def __init__(self, verbose=False):
@@ -26,25 +27,25 @@ class BenchmarkRunner:
             return False
 
         # Create backup
-        backup_path = file_path.with_suffix(file_path.suffix + '.bak')
+        backup_path = file_path.with_suffix(file_path.suffix + ".bak")
         shutil.copy2(file_path, backup_path)
-        
+
         # Define line numbers for different versions
         version_positions = {
             "v0.1": (153, 218),
-            "v0.2": (153, 213),
+            "v0.2": (238, 325),
             "v0.3": (558, 559),
             "v0.4": (574, 575),
             "v0.5": (582, 583),
-            "v0.6": (582, 583)
+            "v0.6": (582, 583),
         }
-        
+
         if version not in version_positions:
             print(f"Error: Version {version} not found in position mapping")
             return False
 
         start_line, end_line = version_positions[version]
-        
+
         # Timing code blocks
         timing_start = """
     // Start timing
@@ -65,24 +66,26 @@ class BenchmarkRunner:
 
         try:
             # Read file content
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 lines = f.readlines()
 
             # Insert timing code at specified line numbers
             modified_lines = []
-            for i, line in enumerate(lines, 1):  # enumerate from 1 to match line numbers
+            for i, line in enumerate(
+                lines, 1
+            ):  # enumerate from 1 to match line numbers
                 modified_lines.append(line)
                 if i == start_line:
-                    modified_lines.append(timing_start + '\n')
+                    modified_lines.append(timing_start + "\n")
                 elif i == end_line:
-                    modified_lines.append(timing_end + '\n')
+                    modified_lines.append(timing_end + "\n")
 
             # Write modified content
-            with open(file_path, 'w') as f:
+            with open(file_path, "w") as f:
                 f.writelines(modified_lines)
 
             # Verify insertion
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 new_content = f.read()
                 if "Start timing" in new_content and "End timing" in new_content:
                     print("Successfully added timing code")
@@ -103,12 +106,14 @@ class BenchmarkRunner:
     def run_benchmark(self, tag):
         """Run benchmark for a specific tag"""
         output_file = self.benchmark_dir / f"{tag.replace('.', '_')}.log"
-        
+
         print(f"Testing tag: {tag}")
-        
+
         # Checkout tag
         try:
-            subprocess.run(["git", "checkout", tag], check=True, capture_output=not self.verbose)
+            subprocess.run(
+                ["git", "checkout", tag], check=True, capture_output=not self.verbose
+            )
         except subprocess.CalledProcessError:
             print(f"Failed to checkout tag {tag}")
             return False
@@ -135,7 +140,7 @@ class BenchmarkRunner:
                 self.BUILD_CMD.split(),
                 capture_output=not self.verbose,
                 text=True,
-                check=True
+                check=True,
             )
             if self.verbose:
                 print(build_result.stdout)
@@ -145,13 +150,13 @@ class BenchmarkRunner:
 
             # Run benchmark
             print("Running the benchmark...")
-            with open(output_file, 'w') as f:
+            with open(output_file, "w") as f:
                 benchmark_result = subprocess.run(
                     [self.EXE_PATH, self.TEST_FILE],
                     check=True,
                     stdout=f if not self.verbose else subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True
+                    text=True,
                 )
                 if self.verbose:
                     print(benchmark_result.stdout)
@@ -170,12 +175,15 @@ class BenchmarkRunner:
         finally:
             # Cleanup
             print("Cleaning up changes...")
-            subprocess.run(["git", "checkout", "--", self.CUDA_FILE], 
-                         capture_output=not self.verbose)
+            subprocess.run(
+                ["git", "checkout", "--", self.CUDA_FILE],
+                capture_output=not self.verbose,
+            )
             if Path(f"{self.CUDA_FILE}.bak").exists():
                 Path(f"{self.CUDA_FILE}.bak").unlink()
-            subprocess.run(["git", "stash", "pop", "-q"], 
-                         capture_output=not self.verbose)
+            subprocess.run(
+                ["git", "stash", "pop", "-q"], capture_output=not self.verbose
+            )
 
     def calculate_average(self, log_file):
         """Calculate median execution time from log file, skipping first and last 10 measurements"""
@@ -183,7 +191,7 @@ class BenchmarkRunner:
             return "N/A"
 
         times = []
-        with open(log_file, 'r') as f:
+        with open(log_file, "r") as f:
             for line in f:
                 if "Total Time:" in line:
                     try:
@@ -194,12 +202,14 @@ class BenchmarkRunner:
 
         # Check if we have enough measurements
         if len(times) <= 20:  # Need more than 20 measurements to skip 10 from each end
-            print(f"Warning: Not enough measurements ({len(times)}) to skip first and last 10 values")
+            print(
+                f"Warning: Not enough measurements ({len(times)}) to skip first and last 10 values"
+            )
             return statistics.median(times) if times else "N/A"
-        
+
         # Skip first 10 and last 10 measurements
         trimmed_times = times[10:-10]
-        
+
         if self.verbose:
             print(f"Total measurements: {len(times)}")
             print(f"Measurements used for median: {len(trimmed_times)}")
@@ -224,10 +234,10 @@ class BenchmarkRunner:
         print("==================")
         print(f"{'Tag':<6} | {'Average Time (ms)':<15}")
         print("-" * 22)
-        
+
         best_tag = None
-        best_time = float('inf')
-        
+        best_time = float("inf")
+
         for tag, avg in results.items():
             print(f"{tag:<6} | {avg:<15}")
             if avg != "N/A" and float(avg) < best_time:
@@ -235,24 +245,26 @@ class BenchmarkRunner:
                 best_tag = tag
 
         if best_tag:
-            print(f"\nBest performing tag: {best_tag} with average time: {best_time:.4f} ms")
+            print(
+                f"\nBest performing tag: {best_tag} with average time: {best_time:.4f} ms"
+            )
 
     def run_single_tag(self, tag):
         """Run benchmark for a single specified tag"""
         print(f"\nRunning benchmark for tag: {tag}")
         print("================================")
-        
+
         if tag not in self.tags:
             print(f"Error: Invalid tag '{tag}'")
             print("\nAvailable tags:")
             for available_tag in self.tags:
                 print(f"- {available_tag}")
             return False
-        
+
         if self.run_benchmark(tag):
             log_file = self.benchmark_dir / f"{tag.replace('.', '_')}.log"
             avg_time = self.calculate_average(log_file)
-            
+
             print("\nResults:")
             print("========")
             print(f"Tag: {tag}")
@@ -262,46 +274,53 @@ class BenchmarkRunner:
             print(f"\nFailed to run benchmark for tag: {tag}")
             return False
 
+
 def print_available_tags(tags):
     print("\nAvailable tags:")
     for tag in tags:
         print(f"- {tag}")
 
+
 def checkout_version(version):
     # Save current run_benchmark.py
-    shutil.copy('run_benchmark.py', 'run_benchmark.py.bak')
-    
+    shutil.copy("run_benchmark.py", "run_benchmark.py.bak")
+
     # Checkout version
-    subprocess.run(['git', 'reset', '--hard', version], check=True)
-    
+    subprocess.run(["git", "reset", "--hard", version], check=True)
+
     # Restore run_benchmark.py
-    shutil.move('run_benchmark.py.bak', 'run_benchmark.py')
+    shutil.move("run_benchmark.py.bak", "run_benchmark.py")
+
 
 def run_benchmarks():
-    versions = ['v0.1', 'v0.2', 'v0.3', 'v0.4', 'v0.5', 'v0.6']
-    
+    versions = ["v0.1", "v0.2", "v0.3", "v0.4", "v0.5", "v0.6"]
+
     for version in versions:
         print(f"\nTesting version: {version}")
         try:
             checkout_version(version)
             # Your existing benchmark code here
             # ...
-            
+
         except Exception as e:
             print(f"Error testing {version}: {str(e)}")
             continue
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run benchmarks for CUDA implementation')
-    parser.add_argument('-v', '--verbose', action='store_true', 
-                        help='Show verbose output')
-    
+    parser = argparse.ArgumentParser(
+        description="Run benchmarks for CUDA implementation"
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Show verbose output"
+    )
+
     # Create a mutually exclusive group for run mode
     mode_group = parser.add_mutually_exclusive_group()
-    mode_group.add_argument('-a', '--all', action='store_true',
-                           help='Run benchmarks for all tags')
-    mode_group.add_argument('-t', '--tag',
-                           help='Run benchmark for a specific tag')
+    mode_group.add_argument(
+        "-a", "--all", action="store_true", help="Run benchmarks for all tags"
+    )
+    mode_group.add_argument("-t", "--tag", help="Run benchmark for a specific tag")
 
     args = parser.parse_args()
 
@@ -318,3 +337,4 @@ if __name__ == "__main__":
         benchmark.run_all_benchmarks()
     elif args.tag:
         benchmark.run_single_tag(args.tag)
+
