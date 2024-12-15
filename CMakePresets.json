@@ -27,18 +27,20 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "USE_CUDA": true,
                 "ENABLE_CPU_PROFILING": true,
-                "CMAKE_VERBOSE_MAKEFILE": true
+                "CMAKE_VERBOSE_MAKEFILE": false
             }
         }
     ],
     "buildPresets": [
         {
             "name": "gcc",
-            "configurePreset": "gcc"
+            "configurePreset": "gcc",
+            "verbose": false
         },
         {
             "name": "gcc-cuda",
-            "configurePreset": "gcc-cuda"
+            "configurePreset": "gcc-cuda",
+            "verbose": false
         }
     ],
     "workflowPresets": [
