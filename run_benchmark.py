@@ -19,7 +19,7 @@ class BenchmarkRunner:
         self.verbose = verbose
 
     def insert_timing_code(self, version):
-        """Insert CUDA timing code into the source file"""
+        """Insert CUDA timing code into the source file based on line numbers"""
         file_path = Path(self.CUDA_FILE)
         if not file_path.exists():
             print(f"Error: File not found at {file_path}")
@@ -29,15 +29,21 @@ class BenchmarkRunner:
         backup_path = file_path.with_suffix(file_path.suffix + '.bak')
         shutil.copy2(file_path, backup_path)
         
-        # Define patterns for different versions
-        patterns = {
-            "v0.1": ("size_t size_window = overlap * sizeof(var_t);", "cudaFree(dev_f2);"),
-            "v0.2": "mdct_cuda_process(state, input, output, trig, window, sine);",
-            "v0.3": "mdct_cuda_process(states[state_size], input, output, trig, window, sine);",
-            "v0.4": "mdct_cuda_process(states[state_size], input, output, trig, window, sine);",
-            "v0.5": "mdct_cuda_process(states[state_size], input, output, trig, window, sine);",
-            "v0.6": "mdct_cuda_process(states[state_size], input, output, sine);"
+        # Define line numbers for different versions
+        version_positions = {
+            "v0.1": (153, 218),
+            "v0.2": (153, 213),
+            "v0.3": (558, 559),
+            "v0.4": (574, 575),
+            "v0.5": (582, 583),
+            "v0.6": (582, 583)
         }
+        
+        if version not in version_positions:
+            print(f"Error: Version {version} not found in position mapping")
+            return False
+
+        start_line, end_line = version_positions[version]
         
         # Timing code blocks
         timing_start = """
@@ -57,54 +63,42 @@ class BenchmarkRunner:
     cudaEventDestroy(start);
     cudaEventDestroy(stop);"""
 
-        # Read file content
-        with open(file_path, 'r') as f:
-            content = f.read()
+        try:
+            # Read file content
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
 
-        # Handle v0.1 differently
-        if version == "v0.1":
-            start_pattern, end_pattern = patterns["v0.1"]
-            lines = content.splitlines()
-            modified_content = []
-            found_start = False
-            found_end = False
+            # Insert timing code at specified line numbers
+            modified_lines = []
+            for i, line in enumerate(lines, 1):  # enumerate from 1 to match line numbers
+                modified_lines.append(line)
+                if i == start_line:
+                    modified_lines.append(timing_start + '\n')
+                elif i == end_line:
+                    modified_lines.append(timing_end + '\n')
 
-            for line in lines:
-                if start_pattern in line and not found_start:
-                    modified_content.append(line)
-                    modified_content.append(timing_start)
-                    found_start = True
-                elif end_pattern in line and not found_end:
-                    modified_content.append(timing_end)
-                    modified_content.append(line)
-                    found_end = True
+            # Write modified content
+            with open(file_path, 'w') as f:
+                f.writelines(modified_lines)
+
+            # Verify insertion
+            with open(file_path, 'r') as f:
+                new_content = f.read()
+                if "Start timing" in new_content and "End timing" in new_content:
+                    print("Successfully added timing code")
+                    return True
                 else:
-                    modified_content.append(line)
-        else:
-            # Handle other versions as before
-            pattern = patterns.get(version, "mdct_cuda_process((state|states[state_size]), input, output, sine);")
-            modified_content = []
-            for line in content.splitlines():
-                if pattern in line:
-                    modified_content.extend([timing_start, line, timing_end])
-                else:
-                    modified_content.append(line)
+                    print("Failed to add timing code")
+                    shutil.copy2(backup_path, file_path)
+                    backup_path.unlink()
+                    return False
 
-        # Write modified content
-        with open(file_path, 'w') as f:
-            f.write('\n'.join(modified_content))
-
-        # Verify insertion
-        with open(file_path, 'r') as f:
-            new_content = f.read()
-            if "Start timing" in new_content and "End timing" in new_content:
-                print("Successfully added timing code")
-                return True
-            else:
-                print("Failed to add timing code")
-                shutil.copy2(backup_path, file_path)
-                backup_path.unlink()
-                return False
+        except Exception as e:
+            print(f"Error during file modification: {str(e)}")
+            # Restore backup if something goes wrong
+            shutil.copy2(backup_path, file_path)
+            backup_path.unlink()
+            return False
 
     def run_benchmark(self, tag):
         """Run benchmark for a specific tag"""
@@ -272,6 +266,30 @@ def print_available_tags(tags):
     print("\nAvailable tags:")
     for tag in tags:
         print(f"- {tag}")
+
+def checkout_version(version):
+    # Save current run_benchmark.py
+    shutil.copy('run_benchmark.py', 'run_benchmark.py.bak')
+    
+    # Checkout version
+    subprocess.run(['git', 'reset', '--hard', version], check=True)
+    
+    # Restore run_benchmark.py
+    shutil.move('run_benchmark.py.bak', 'run_benchmark.py')
+
+def run_benchmarks():
+    versions = ['v0.1', 'v0.2', 'v0.3', 'v0.4', 'v0.5', 'v0.6']
+    
+    for version in versions:
+        print(f"\nTesting version: {version}")
+        try:
+            checkout_version(version)
+            # Your existing benchmark code here
+            # ...
+            
+        except Exception as e:
+            print(f"Error testing {version}: {str(e)}")
+            continue
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run benchmarks for CUDA implementation')
