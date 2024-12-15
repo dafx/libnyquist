@@ -503,8 +503,7 @@ void mdct_cuda_destroy(mdct_cuda_state *state) {
 
 // Process MDCT using persistent state
 void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
-                       var_t *output[2], const var_t *trig, const var_t *window,
-                       var_t sine) {
+                       var_t *output[2], var_t sine) {
   if (!state || !state->initialized)
     return;
 
@@ -512,9 +511,6 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
   cudaMemcpy(state->dev_input, input[0], state->size_input,
              cudaMemcpyHostToDevice);
   cudaMemcpy(state->dev_input1, input[1], state->size_input,
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(state->dev_t, trig, state->size_trig, cudaMemcpyHostToDevice);
-  cudaMemcpy(state->dev_window, window, state->size_window,
              cudaMemcpyHostToDevice);
 
   // Pre-rotation
@@ -577,11 +573,16 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2],
       printf("Failed to create MDCT CUDA state\n");
       return;
     }
+
+    // copy trig and windows from host to device
+    cudaMemcpy(states[state_size]->dev_t, trig, states[state_size]->size_trig, cudaMemcpyHostToDevice);
+    cudaMemcpy(states[state_size]->dev_window, window, states[state_size]->size_window, cudaMemcpyHostToDevice);
   }
 
   // Process using persistent state
-  mdct_cuda_process(states[state_size], input, output, trig, window, sine);
+  mdct_cuda_process(states[state_size], input, output, sine);
 }
+
 
 // Update cleanup function
 void cleanupCudaBuffers() {
@@ -658,8 +659,8 @@ void performanceTest(int numIterations) {
     cudaEventElapsedTime(&milliseconds, start, stop);
 
     totalTime += milliseconds;
-    minTime = min(minTime, milliseconds);
-    maxTime = max(maxTime, milliseconds);
+    minTime = std::min(minTime, milliseconds);
+    maxTime = std::max(maxTime, milliseconds);
 
     if ((i + 1) % 10 == 0) {
       printf("Completed %d iterations...\n", i + 1);
