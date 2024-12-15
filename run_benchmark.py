@@ -134,6 +134,17 @@ class BenchmarkRunner:
             # Apply timing patch
             if not self.insert_timing_code(tag):
                 raise Exception("Failed to apply timing patch")
+            
+            # Add Colab build fix for v0.3 and v0.4
+            if (tag == "v0.3" or tag == "v0.4"):
+              print("Adding Colab build fix...")
+              try:
+                subprocess.run(
+                    ["git", "checkout", "v0.5", "--", "cuda/mdct_cuda.hpp"]
+                )
+              except subprocess.subprocess.CalledProcessError:
+                print(f"Failed to add Colab build fix")
+                return False
 
             # Build
             print("Building the code...")
