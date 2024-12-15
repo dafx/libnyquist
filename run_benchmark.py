@@ -140,7 +140,9 @@ class BenchmarkRunner:
               print("Adding Colab build fix...")
               try:
                 subprocess.run(
-                    ["git", "checkout", "v0.5", "--", "cuda/mdct_cuda.hpp"]
+                    ["git", "checkout", "v0.5", "--", "cuda/mdct_cuda.hpp"],
+                    check=True,
+                    capture_output=not self.verbose,
                 )
               except subprocess.subprocess.CalledProcessError:
                 print(f"Failed to add Colab build fix")
