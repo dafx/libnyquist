@@ -184,7 +184,7 @@ class BenchmarkRunner:
                          capture_output=not self.verbose)
 
     def calculate_average(self, log_file):
-        """Calculate average execution time from log file, skipping first and last 10 measurements"""
+        """Calculate median execution time from log file, skipping first and last 10 measurements"""
         if not log_file.exists():
             return "N/A"
 
@@ -201,18 +201,18 @@ class BenchmarkRunner:
         # Check if we have enough measurements
         if len(times) <= 20:  # Need more than 20 measurements to skip 10 from each end
             print(f"Warning: Not enough measurements ({len(times)}) to skip first and last 10 values")
-            return statistics.mean(times) if times else "N/A"
+            return statistics.median(times) if times else "N/A"
         
         # Skip first 10 and last 10 measurements
         trimmed_times = times[10:-10]
         
         if self.verbose:
             print(f"Total measurements: {len(times)}")
-            print(f"Measurements used for average: {len(trimmed_times)}")
+            print(f"Measurements used for median: {len(trimmed_times)}")
             print(f"Skipped first 10 values: {times[:10]}")
             print(f"Skipped last 10 values: {times[-10:]}")
 
-        return statistics.mean(trimmed_times) if trimmed_times else "N/A"
+        return statistics.median(trimmed_times) if trimmed_times else "N/A"
 
     def run_all_benchmarks(self):
         """Run benchmarks for all tags and analyze results"""
