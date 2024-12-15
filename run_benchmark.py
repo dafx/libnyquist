@@ -190,6 +190,10 @@ class BenchmarkRunner:
             # Cleanup
             print("Cleaning up changes...")
             subprocess.run(
+                ["git", "reset", "--hard"],
+                capture_output=not self.verbose,
+            )
+            subprocess.run(
                 ["git", "checkout", "--", self.CUDA_FILE],
                 capture_output=not self.verbose,
             )
