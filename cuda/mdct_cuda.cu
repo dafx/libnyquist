@@ -526,7 +526,7 @@ void mdct_cuda_process(mdct_cuda_state *state, const var_t *input[2],
   cudaMemcpy(state->dev_output1, output[1], state->size_output,
     cudaMemcpyHostToDevice);
 
-  cudaStreamSynchronize(state->stream);
+  //cudaStreamSynchronize(state->stream);
 
   var_t *c0_output_offset = state->dev_output + (state->overlap >> 1);
   var_t *c1_output_offset = state->dev_output1 + (state->overlap >> 1);
