@@ -147,11 +147,26 @@ __global__ void postAndMirrorKernel(var_t *d_out, const var_t *t,
   }
 }
 
+__constant__ float const_window[120];
+
+__global__ void copyWindow(const float *in) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < 120) {
+        const_window[idx] = in[idx];
+    }
+}
+
 __global__ void postAndMirrorKernelFused(var_t *d_out_ch0, var_t *d_out_ch1,
                                          const var_t *t, const var_t *window,
                                          int N2, int N4, int shift, var_t sine,
                                          int overlap) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  __shared__ float shared_window[120];
+  if (idx < 120) {
+      shared_window[idx] = window[idx];
+  }
+  __syncthreads();
 
   // Handle post-rotation part for both channels
   if (idx < (N4 + 1) >> 1) {
@@ -241,8 +256,8 @@ __global__ void postAndMirrorKernelFused(var_t *d_out_ch0, var_t *d_out_ch1,
       var_t x1, x2;
       var_t *xp1 = d_out_ch0 + overlap - 1 - mirror_idx;
       var_t *yp1 = d_out_ch0 + mirror_idx;
-      const var_t *wp1 = window + mirror_idx;
-      const var_t *wp2 = window + overlap - 1 - mirror_idx;
+      const var_t* wp1 = shared_window + mirror_idx;
+      const var_t* wp2 = shared_window + overlap - 1 - mirror_idx;
 
       x1 = *xp1;
       x2 = *yp1;
@@ -260,8 +275,8 @@ __global__ void postAndMirrorKernelFused(var_t *d_out_ch0, var_t *d_out_ch1,
       var_t x1, x2;
       var_t *xp1 = d_out_ch1 + overlap - 1 - mirror_idx;
       var_t *yp1 = d_out_ch1 + mirror_idx;
-      const var_t *wp1 = window + mirror_idx;
-      const var_t *wp2 = window + overlap - 1 - mirror_idx;
+      const var_t* wp1 = shared_window + mirror_idx;
+      const var_t* wp2 = shared_window + overlap - 1 - mirror_idx;
 
       x1 = *xp1;
       x2 = *yp1;
@@ -577,6 +592,7 @@ void processMDCTCudaB1C2(const var_t *input[2], var_t *output[2],
     // copy trig and windows from host to device
     cudaMemcpy(states[state_size]->dev_t, trig, states[state_size]->size_trig, cudaMemcpyHostToDevice);
     cudaMemcpy(states[state_size]->dev_window, window, states[state_size]->size_window, cudaMemcpyHostToDevice);
+    //copyWindow <<<1, 120 >>> (states[state_size]->dev_window);
   }
 
   // Process using persistent state
