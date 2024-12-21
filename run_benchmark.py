@@ -14,7 +14,7 @@ class BenchmarkRunner:
         self.EXE_PATH = "./out/build/gcc-cuda/bin/libnyquist-examples"
         self.TEST_FILE = "./test_data/sb-reverie.opus"
         self.CUDA_FILE = "cuda/mdct_cuda.cu"
-        self.tags = ["v0.1", "v0.2", "v0.3", "v0.4", "v0.5", "v0.6"]
+        self.tags = ["v0.1", "v0.2", "v0.3", "v0.4", "v0.5", "v0.6", "v0.7"]
         self.benchmark_dir = Path("benchmark")
         self.benchmark_dir.mkdir(exist_ok=True)
         self.verbose = verbose
@@ -38,6 +38,7 @@ class BenchmarkRunner:
             "v0.4": (574, 575),
             "v0.5": (582, 583),
             "v0.6": (582, 583),
+            "v0.7": (582, 583),
         }
 
         if version not in version_positions:
@@ -293,7 +294,7 @@ def checkout_version(version):
 
 
 def run_benchmarks():
-    versions = ["v0.1", "v0.2", "v0.3", "v0.4", "v0.5", "v0.6"]
+    versions = ["v0.1", "v0.2", "v0.3", "v0.4", "v0.5", "v0.6", "v0.7"]
 
     for version in versions:
         print(f"\nTesting version: {version}")
